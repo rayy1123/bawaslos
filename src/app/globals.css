@@ -1,0 +1,182 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light;
+  --ink: #0b1f4b;
+  --ink-soft: #2c3e63;
+  --paper: #f6f3ec;
+  --paper-2: #fbfaf6;
+  --gold: #b0892f;
+  --gold-soft: #c9a64a;
+  --line: rgba(11, 31, 75, 0.14);
+  --danger: #8a2b2b;
+  --good: #2f6b4f;
+}
+
+html,
+body {
+  padding: 0;
+  margin: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-inter), system-ui, -apple-system, 'Segoe UI', sans-serif;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+/* Typography editorial */
+.font-serif {
+  font-family: var(--font-playfair), Georgia, 'Times New Roman', serif;
+}
+.font-mono-num {
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Official label: small-caps, extended tracking */
+.label-official {
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--gold);
+}
+
+/* Double underline ala dokumen resmi */
+.rule-double {
+  border: 0;
+  border-top: 3px double var(--ink);
+}
+
+/* Pair card */
+.pair-card {
+  transition: transform 0.3s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.3s ease, border-color 0.3s ease;
+  border: 1px solid var(--line);
+  background: var(--paper-2);
+}
+.pair-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 22px 48px -24px rgba(11, 31, 75, 0.55);
+  border-color: var(--gold);
+}
+
+/* Progress bar */
+.race-bar {
+  transition: width 0.8s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* fade-up */
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(14px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.animate-fade-up {
+  animation: fadeUp 0.6s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* reveal votes one by one */
+@keyframes dropIn {
+  from { opacity: 0; transform: translateY(-6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.animate-drop {
+  animation: dropIn 0.4s ease both;
+}
+
+/* Brand text slide-in (hanya beranda) */
+@keyframes brand-slide {
+  from { opacity: 0; transform: translateX(-18px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+.brand-slide {
+  animation: brand-slide 0.7s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* Logo hero beranda: animasi masuk (fade + slide-up + scale) */
+@keyframes logo-enter {
+  from { opacity: 0; transform: translateY(22px) scale(0.92); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+.logo-enter {
+  animation: logo-enter 0.9s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .brand-slide { animation: none; }
+  .logo-enter { animation: none; }
+}
+
+/* main buttons: ink solid, hover gold */
+.btn-ink {
+  background: var(--ink);
+  color: #fff;
+  transition: background 0.2s ease, transform 0.1s ease;
+}
+.btn-ink:hover { background: #112a5e; }
+.btn-ink:active { transform: translateY(1px); }
+
+.btn-gold {
+  background: var(--gold);
+  color: #fff;
+  transition: background 0.2s ease, transform 0.1s ease;
+}
+.btn-gold:hover { background: #9c7826; }
+.btn-gold:active { transform: translateY(1px); }
+
+/* site nav */
+.site-nav {
+  backdrop-filter: blur(8px);
+  background: rgba(246, 243, 236, 0.82);
+  border-bottom: 1px solid var(--line);
+}
+
+/* Badge berita */
+.badge-terkini {
+  display: inline-block;
+  background: #0b1f4b;
+  color: #c5a059;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 2px 8px;
+  border-radius: 9999px;
+}
+.badge-new {
+  display: inline-block;
+  background: #b0892f;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 2px 8px;
+  border-radius: 9999px;
+}
+
+/* print */
+@media print {
+  .site-nav, header a, .no-print { display: none !important; }
+  body { background: #fff; }
+  main { max-width: 100%; }
+}
+
+/* === Arena Scoreboard (Civic Excellence) === */
+.arena-grid {
+  background-size: 40px 40px;
+  background-image:
+    linear-gradient(to right, rgba(27, 46, 75, 0.05) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(27, 46, 75, 0.05) 1px, transparent 1px);
+}
+.arena-glow {
+  text-shadow: 0 0 20px rgba(197, 160, 89, 0.5);
+}
+.arena-pillar {
+  transition: none;
+}

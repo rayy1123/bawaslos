@@ -1,0 +1,4 @@
+﻿- Selalu utamakan kenyamanan UX dan keindahan UI modern (clean, professional, and responsive).
+- Gunakan skema warna netral premium (seperti slate, zinc, atau gray). Hindari warna kontras murni (#000) jika tidak diperlukan.
+- Pastikan interaksi antar-elemen memiliki transisi yang halus (efek hover pada tombol, animasi transisi halaman).
+- Jangan merusak atau mengubah logika fungsi backend yang sudah berjalan 70% saat ini.
