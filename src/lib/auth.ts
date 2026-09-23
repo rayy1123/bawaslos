@@ -25,12 +25,14 @@ export function verifyToken(token: string, hash: string, salt: string): boolean 
   return crypto.timingSafeEqual(a, b);
 }
 
-// Token voter: 16 karakter alfanumerik aman (mudah diketik di layar pemilih).
-const ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // hindari karakter mirip (0/O,1/I)
-export function generateToken(): string {
+// Token voter: 8 karakter alfanumerik aman & mudah diketik (tanpa huruf/angka ambigu seperti 0/O, 1/I).
+const ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+export function generateToken(length = 8): string {
   let out = '';
-  const bytes = crypto.randomBytes(16);
-  for (let i = 0; i < 16; i++) out += ALPHABET[bytes[i] % ALPHABET.length];
+  const bytes = crypto.randomBytes(length);
+  for (let i = 0; i < length; i++) {
+    out += ALPHABET[bytes[i] % ALPHABET.length];
+  }
   return out;
 }
 

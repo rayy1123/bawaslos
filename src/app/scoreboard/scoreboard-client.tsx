@@ -13,11 +13,8 @@ type TallyRow = {
   votes: number;
 };
 
-type TimelineRow = { voter_no: number; account_id: number; pair_id: number };
-
 type Props = {
   initialTally: TallyRow[];
-  timeline: TimelineRow[];
   total: number;
   revealedInit: number;
 };
@@ -29,7 +26,6 @@ type ApiData = {
   published: boolean;
   revealed: number;
   total: number;
-  timeline: TimelineRow[];
   tally: TallyRow[];
 };
 
@@ -62,7 +58,7 @@ function BigNum({ value }: { value: number }) {
   return <span className="font-mono-num">{v.toLocaleString('id-ID')}</span>;
 }
 
-export default function ScoreboardClient({ initialTally, timeline, total, revealedInit }: Props) {
+export default function ScoreboardClient({ initialTally, total, revealedInit }: Props) {
   const [api, setApi] = useState<ApiData | null>(null);
 
   useEffect(() => {
@@ -82,14 +78,8 @@ export default function ScoreboardClient({ initialTally, timeline, total, reveal
 
   const livePublished = api ? api.published : true;
   const liveTotal = api ? api.total : total;
-  const liveTimeline = api ? api.timeline : timeline;
   const liveRevealed = api ? api.revealed : revealedInit;
-  const liveTally = api
-    ? api.tally
-    : initialTally.map((row) => ({
-        ...row,
-        votes: timeline.filter((t) => t.pair_id === row.pair_id).length,
-      }));
+  const liveTally = api ? api.tally : initialTally;
 
   const currentTally = useMemo(() => liveTally, [liveTally]);
   const totalVotes = liveTotal;

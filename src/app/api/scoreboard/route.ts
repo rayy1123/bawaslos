@@ -1,26 +1,21 @@
 import { NextResponse } from 'next/server';
-import { tally, voteTimeline, getScoreboardState } from '@/lib/queries';
+import { revealedTally, getScoreboardState } from '@/lib/queries';
 
 export const dynamic = 'force-dynamic';
 
 // Endpoint publik read-only untuk scoreboard (dipolling oleh publik agar realtime
-// saat admin mengubah publish/reveal). Tidak ada mutasi di sini.
+// saat admin mengubah publish/reveal).
+// Data pilihan individual pemilih tidak diekspos ke publik demi menjaga kerahasiaan suara (LUBER).
 export async function GET() {
   const state = getScoreboardState();
   if (!state.published) {
-    return NextResponse.json({ published: false, revealed: 0, total: state.total });
+    return NextResponse.json({ published: false, revealed: 0, total: state.total, tally: [] });
   }
-  const all = voteTimeline();
-  const timeline = all.slice(0, state.revealed);
-  const tallyData = tally().map((row) => ({
-    ...row,
-    votes: timeline.filter((t) => t.pair_id === row.pair_id).length,
-  }));
+  const tallyData = revealedTally(state.revealed);
   return NextResponse.json({
     published: true,
-    revealed: timeline.length,
+    revealed: state.revealed,
     total: state.total,
-    timeline,
     tally: tallyData,
   });
 }

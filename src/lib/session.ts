@@ -39,25 +39,63 @@ export async function isAdmin(): Promise<boolean> {
   return token ? verifyAdminSession(token) : false;
 }
 
-// Voter login: verifikasi token, set cookie voter (signed plaintext token).
-export async function voterLogin(accountId: number, token: string): Promise<boolean> {
+import { getVoterByToken, getVoterById } from './queries';
+
+export type ActiveVoter = {
+  accountId: number;
+  voterId?: number;
+  voterNo?: number;
+  name?: string;
+};
+
+// Voter login: verifikasi token (DPT massal 1-300 atau akun bilik).
+export async function voterLogin(
+  accountId: number,
+  token: string
+): Promise<{ ok: boolean; error?: string; voterNo?: number }> {
+  const clean = token.trim().toUpperCase();
+
+  // 1. Cek pada daftar pemilih massal / DPT (1-300 dst)
+  const voter = getVoterByToken(clean);
+  if (voter) {
+    if (voter.is_used === 1) {
+      return {
+        ok: false,
+        error: `Token Pemilih #${voter.voter_no} sudah pernah digunakan pada ${voter.used_at || 'sebelumnya'}.`,
+      };
+    }
+    const cookieStore = await cookies();
+    cookieStore.set(VOTER_COOKIE, signVoterSession(`v:${voter.id}:${accountId || 1}`), {
+      httpOnly: true,
+      sameSite: 'lax',
+      path: '/',
+      maxAge: 60 * 60,
+    });
+    return { ok: true, voterNo: voter.voter_no };
+  }
+
+  // 2. Fallback: cek akun tetap bilik (Akun 1, 2, 3)
   const db = getDb();
   const acc = db
     .prepare('SELECT id, token_hash FROM accounts WHERE id = ?')
     .get(accountId) as { id: number; token_hash: string | null } | undefined;
-  if (!acc || !acc.token_hash) return false;
-  const [salt, hash] = String(acc.token_hash).includes(':')
-    ? String(acc.token_hash).split(':')
-    : ['', acc.token_hash];
-  if (!verifyToken(token, hash, salt)) return false;
-  const cookieStore = await cookies();
-  cookieStore.set(VOTER_COOKIE, signVoterSession(token), {
-    httpOnly: true,
-    sameSite: 'lax',
-    path: '/',
-    maxAge: 60 * 60, // 1 jam cukup untuk satu kali memilih
-  });
-  return true;
+  if (acc && acc.token_hash) {
+    const [salt, hash] = String(acc.token_hash).includes(':')
+      ? String(acc.token_hash).split(':')
+      : ['', acc.token_hash];
+    if (verifyToken(clean, hash, salt)) {
+      const cookieStore = await cookies();
+      cookieStore.set(VOTER_COOKIE, signVoterSession(`acc:${acc.id}`), {
+        httpOnly: true,
+        sameSite: 'lax',
+        path: '/',
+        maxAge: 60 * 60,
+      });
+      return { ok: true };
+    }
+  }
+
+  return { ok: false, error: 'Token tidak valid atau belum terdaftar di DPT.' };
 }
 
 export async function voterLogout() {
@@ -65,24 +103,57 @@ export async function voterLogout() {
   cookieStore.delete(VOTER_COOKIE);
 }
 
-// Mengembalikan accountId dari cookie voter, atau null.
-export async function currentVoterAccount(): Promise<number | null> {
+// Mengambil sesi pemilih aktif (baik dari DPT massal atau akun bilik).
+export async function currentVoterSession(): Promise<ActiveVoter | null> {
   const cookieStore = await cookies();
   const signed = cookieStore.get(VOTER_COOKIE)?.value;
   if (!signed) return null;
-  const plain = verifyVoterSession(signed);
-  if (!plain) return null;
+  const payload = verifyVoterSession(signed);
+  if (!payload) return null;
+
+  // Format DPT: v:{voterId}:{boothId}
+  if (payload.startsWith('v:')) {
+    const [, idStr, boothStr] = payload.split(':');
+    const voterId = Number(idStr);
+    const boothId = Number(boothStr) || 1;
+    const voter = getVoterById(voterId);
+    if (!voter || voter.is_used === 1) {
+      await voterLogout();
+      return null;
+    }
+    return {
+      accountId: boothId,
+      voterId: voter.id,
+      voterNo: voter.voter_no,
+      name: voter.name,
+    };
+  }
+
+  // Format Booth account: acc:{accountId}
+  if (payload.startsWith('acc:')) {
+    const [, accIdStr] = payload.split(':');
+    const accountId = Number(accIdStr);
+    return { accountId };
+  }
+
+  // Fallback token lama
   const db = getDb();
-  const acc = db.prepare('SELECT id, token_hash FROM accounts').all() as {
+  const accs = db.prepare('SELECT id, token_hash FROM accounts').all() as {
     id: number;
     token_hash: string | null;
   }[];
-  for (const a of acc) {
+  for (const a of accs) {
     if (!a.token_hash) continue;
     const [salt, hash] = String(a.token_hash).includes(':')
       ? String(a.token_hash).split(':')
       : ['', a.token_hash];
-    if (verifyToken(plain, hash, salt)) return a.id;
+    if (verifyToken(payload, hash, salt)) return { accountId: a.id };
   }
   return null;
+}
+
+// Mengembalikan accountId dari cookie voter, atau null.
+export async function currentVoterAccount(): Promise<number | null> {
+  const s = await currentVoterSession();
+  return s ? s.accountId : null;
 }

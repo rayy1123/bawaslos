@@ -11,6 +11,8 @@ import {
   getVotingOpen,
   getSettings,
   getRules,
+  listVoters,
+  getVotersStats,
 } from '@/lib/queries';
 import AdminDashboard from './admin-dashboard';
 
@@ -27,11 +29,15 @@ export default async function AdminPage() {
   const sb = getScoreboardState();
   const rules = getRules();
   const settings = getSettings();
+  const { voters } = listVoters({ limit: 1000 });
+  const votersStats = getVotersStats();
   return (
     <AdminDashboard
       pairs={pairs}
       news={news}
       accounts={accounts}
+      voters={voters}
+      votersStats={votersStats}
       total={total}
       byAccount={byAccount}
       audit={audit}

@@ -29,7 +29,7 @@ export default async function BeritaDetailPage({ params }: { params: { id: strin
           )}
           <div className="p-8">
             <div className="mb-3 flex items-center gap-2">
-              <span className="badge-terkini">Terkini</span>
+              {news.featured ? <span className="badge-terkini">Terkini</span> : null}
               {news.is_new ? <span className="badge-new">Baru</span> : null}
             </div>
             <p className="text-xs font-semibold uppercase tracking-wider text-[#b0892f]">

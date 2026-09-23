@@ -8,6 +8,7 @@ import {
   voterLogout as doVoterLogout,
   isAdmin,
   currentVoterAccount,
+  currentVoterSession,
 } from './session';
 import {
   castVote,
@@ -25,6 +26,9 @@ import {
   saveRules,
   saveSettings,
   setVotingOpen,
+  generateVotersBatch,
+  resetAllVoters,
+  getVotersStats,
 } from './queries';
 import { hashPassword, makeSalt } from './auth';
 import { getDb } from './db';
@@ -173,14 +177,14 @@ export async function toggleNewsFlagAction(formData: FormData) {
 
 // ---------------- VOTER ----------------
 export async function voterLoginAction(formData: FormData) {
-  const accountId = Number(formData.get('accountId'));
+  const accountId = Number(formData.get('accountId')) || 1;
   const token = String(formData.get('token') || '').trim().toUpperCase();
-  const ok = await doVoterLogin(accountId, token);
-  if (ok) {
+  const res = await doVoterLogin(accountId, token);
+  if (res.ok) {
     revalidatePath('/vote');
-    return { ok: true };
+    return { ok: true, voterNo: res.voterNo };
   }
-  return { ok: false, error: 'Token salah atau belum dibuat admin.' };
+  return { ok: false, error: res.error || 'Token salah atau belum dibuat admin.' };
 }
 
 export async function voterLogoutAction() {
@@ -190,15 +194,40 @@ export async function voterLogoutAction() {
 }
 
 export async function castVoteAction(formData: FormData) {
-  const accountId = await currentVoterAccount();
-  if (!accountId) return { ok: false, error: 'Sesi tidak valid. Login ulang.' };
+  const session = await currentVoterSession();
+  if (!session) return { ok: false, error: 'Sesi tidak valid. Silakan login ulang dengan token Anda.' };
   const pairId = Number(formData.get('pairId'));
-  const res = castVote(accountId, pairId);
+  const res = castVote(session.accountId, pairId, session.voterId);
   // Hancurkan sesi voter setelah memilih (satu sesi = satu suara).
   await doVoterLogout();
   revalidatePath('/scoreboard');
+  revalidatePath('/admin');
+  revalidatePath('/vote');
   revalidatePath('/');
-  return { ok: true, voter_no: res.voter_no, accountId };
+  return { ok: true, voter_no: res.voter_no, accountId: session.accountId, voterNo: session.voterNo };
+}
+
+// ---------------- DAFTAR PEMILIH TETAP (DPT / BATCH 1-300) ----------------
+export async function generateVotersAction(formData: FormData) {
+  if (!(await isAdmin())) return { ok: false, error: 'Tidak berwenang.' };
+  const fromNo = Number(formData.get('fromNo') || 1);
+  const toNo = Number(formData.get('toNo') || 300);
+  if (fromNo < 1 || toNo < fromNo) {
+    return { ok: false, error: 'Rentang nomor pemilih tidak valid (minimal 1).' };
+  }
+  if (toNo - fromNo > 2000) {
+    return { ok: false, error: 'Maksimal pembuatan per batch adalah 2.000 token.' };
+  }
+  const res = generateVotersBatch(fromNo, toNo);
+  revalidatePath('/admin');
+  return { ok: true, count: res.count, start: res.start, end: res.end };
+}
+
+export async function resetVotersAction() {
+  if (!(await isAdmin())) return { ok: false, error: 'Tidak berwenang.' };
+  resetAllVoters();
+  revalidatePath('/admin');
+  return { ok: true };
 }
 
 // ---------------- RESET ----------------

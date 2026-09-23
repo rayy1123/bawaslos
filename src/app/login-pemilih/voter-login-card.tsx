@@ -75,21 +75,15 @@ export default function VoterLoginCard() {
 
             <form onSubmit={handleSubmit} onFocus={openForm} className="mt-5 space-y-3">
               <div>
-                <label className="block text-sm font-medium text-[#2c3e63]">Akun Pemilih</label>
+                <label className="block text-sm font-medium text-[#2c3e63]">Terminal / Bilik Suara</label>
                 <select
                   value={accountId}
                   onChange={(e) => setAccountId(Number(e.target.value))}
-                  className="mt-1 w-full rounded-lg border border-[#0b1f4b]/20 px-3 py-2 text-sm focus:border-[#0b1f4b] focus:outline-none"
+                  className="mt-1 w-full rounded-lg border border-[#0b1f4b]/20 bg-slate-50 px-3 py-2 text-sm font-semibold text-[#0b1f4b] focus:border-[#0b1f4b] focus:outline-none"
                 >
-                  {accounts.length === 0 ? (
-                    <option value={1}>Akun 1</option>
-                  ) : (
-                    accounts.map((a) => (
-                      <option key={a.id} value={a.id} disabled={!a.has_token}>
-                        {a.label} {a.has_token ? '' : '(token belum dibuat)'}
-                      </option>
-                    ))
-                  )}
+                  <option value={1}>Bilik Suara 1</option>
+                  <option value={2}>Bilik Suara 2</option>
+                  <option value={3}>Bilik Suara 3</option>
                 </select>
               </div>
               <div>
@@ -99,7 +93,8 @@ export default function VoterLoginCard() {
                   <input
                     value={token}
                     onChange={(e) => setToken(e.target.value.toUpperCase())}
-                    placeholder="6-8 digit token"
+                    placeholder="8 karakter token"
+                    maxLength={12}
                     className="w-full bg-transparent px-2 py-2 text-sm uppercase tracking-widest outline-none"
                     autoFocus
                   />

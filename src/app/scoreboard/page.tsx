@@ -1,4 +1,4 @@
-import { tally, voteTimeline, getScoreboardState } from '@/lib/queries';
+import { revealedTally, getScoreboardState } from '@/lib/queries';
 import Link from 'next/link';
 import ScoreboardClient from './scoreboard-client';
 import AppShell from '@/components/AppShell';
@@ -26,21 +26,14 @@ export default async function PublicScoreboardPage() {
       </AppShell>
     );
   }
-  // Hanya suara yang sudah di-reveal oleh admin yang ditampilkan ke publik.
-  const all = voteTimeline();
-  const timeline = all.slice(0, state.revealed);
-  const revealed = timeline.length;
-  const tallyData = tally().map((row) => {
-    const votes = timeline.filter((t) => t.pair_id === row.pair_id).length;
-    return { ...row, votes };
-  });
+  // Hanya suara yang sudah di-reveal oleh admin yang dihitung untuk tampilan publik.
+  const tallyData = revealedTally(state.revealed);
   return (
     <AppShell>
       <ScoreboardClient
         initialTally={tallyData}
-        timeline={timeline}
         total={total}
-        revealedInit={revealed}
+        revealedInit={state.revealed}
       />
     </AppShell>
   );

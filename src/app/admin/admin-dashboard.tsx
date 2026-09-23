@@ -19,8 +19,10 @@ import {
   setVotingOpenAction,
   saveRulesAction,
   saveSettingsAction,
+  generateVotersAction,
+  resetVotersAction,
 } from '@/lib/actions';
-import type { Pair, NewsItem, Account } from '@/lib/queries';
+import type { Pair, NewsItem, Account, VoterRecord } from '@/lib/queries';
 import LogoSeal from '@/components/LogoSeal';
 
 function readFileAsDataURL(file: File): Promise<string> {
@@ -36,6 +38,8 @@ type Props = {
   pairs: Pair[];
   news: NewsItem[];
   accounts: Account[];
+  voters?: VoterRecord[];
+  votersStats?: { total: number; used: number; unused: number; turnout: number };
   total: number;
   byAccount: { account_id: number; count: number }[];
   audit: { id: number; action: string; detail: string; account_id: number | null; created_at: string }[];
@@ -45,7 +49,20 @@ type Props = {
   settings: { org_name: string; org_subtitle: string; logo_url: string; mascot_url: string };
 };
 
-export default function AdminDashboard({ pairs, news, accounts, total, byAccount, audit, scoreboard, votingOpen, rules, settings }: Props) {
+export default function AdminDashboard({
+  pairs,
+  news,
+  accounts,
+  voters = [],
+  votersStats = { total: 0, used: 0, unused: 0, turnout: 0 },
+  total,
+  byAccount,
+  audit,
+  scoreboard,
+  votingOpen,
+  rules,
+  settings,
+}: Props) {
   const router = useRouter();
   const [active, setActive] = useState<'pairs' | 'news' | 'tokens' | 'scoreboard' | 'panduan' | 'audit' | 'settings'>('pairs');
   const [tokenModal, setTokenModal] = useState<{ accountId: number; token: string } | null>(null);
@@ -58,11 +75,24 @@ export default function AdminDashboard({ pairs, news, accounts, total, byAccount
   const [mascotDraft, setMascotDraft] = useState('');
   const [coverDraft, setCoverDraft] = useState('');
   const [brandMsg, setBrandMsg] = useState('');
+  const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [newsEdit, setNewsEdit] = useState<{ id?: number; title: string; body: string; cover_url: string }>({
     title: '',
     body: '',
     cover_url: '',
   });
+  const [genFrom, setGenFrom] = useState(1);
+  const [genTo, setGenTo] = useState(300);
+  const [genBusy, setGenBusy] = useState(false);
+  const [voterSearch, setVoterSearch] = useState('');
+  const [voterFilter, setVoterFilter] = useState<'all' | 'used' | 'unused'>('all');
+
+  function notify(text: string, type: 'success' | 'error' = 'success') {
+    setFeedback({ type, text });
+    setTimeout(() => {
+      setFeedback((cur) => (cur?.text === text ? null : cur));
+    }, 4500);
+  }
 
   async function refresh() {
     router.refresh();
@@ -92,6 +122,41 @@ export default function AdminDashboard({ pairs, news, accounts, total, byAccount
     refresh();
   }
 
+  async function handleGenerateVoters(e: React.FormEvent) {
+    e.preventDefault();
+    if (genFrom < 1 || genTo < genFrom) {
+      notify('Rentang nomor pemilih tidak valid.', 'error');
+      return;
+    }
+    const count = genTo - genFrom + 1;
+    if (voters.length > 0 && !confirm(`Generate ulang ${count} token (No. ${genFrom} - ${genTo})? Token lama pada nomor ini akan diganti.`)) {
+      return;
+    }
+    setGenBusy(true);
+    const fd = new FormData();
+    fd.set('fromNo', String(genFrom));
+    fd.set('toNo', String(genTo));
+    const res = await generateVotersAction(fd);
+    setGenBusy(false);
+    if (res.ok) {
+      notify(`Berhasil generate ${res.count} token pemilih (No. ${res.start} - ${res.end})! Siap diekspor ke Excel.`);
+      refresh();
+    } else {
+      notify(res.error || 'Gagal generate token.', 'error');
+    }
+  }
+
+  async function handleResetVoters() {
+    if (!confirm('HAPUS SEMUA DATA TOKEN PEMILIH DPT? Data pemilih dan token akan dikosongkan.')) return;
+    const res = await resetVotersAction();
+    if (res.ok) {
+      notify('Seluruh data token pemilih berhasil dihapus.');
+      refresh();
+    } else {
+      notify(res.error || 'Gagal mereset token.', 'error');
+    }
+  }
+
   async function handleCreateToken(accountId: number) {
     const fd = new FormData();
     fd.set('accountId', String(accountId));
@@ -111,15 +176,21 @@ export default function AdminDashboard({ pairs, news, accounts, total, byAccount
     refresh();
   }
 
-  async function handleChangePw(e: React.FormEvent) {
+  async function handleChangePw(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
+    const form = e.currentTarget;
     setPwBusy(true);
     setPwMsg('');
-    const fd = new FormData(e.currentTarget as HTMLFormElement);
+    const fd = new FormData(form);
     const res = await changeAdminPasswordAction(fd);
     setPwBusy(false);
     setPwMsg(res.ok ? 'Password admin berhasil diubah.' : res.error || 'Gagal.');
-    if (res.ok) (e.currentTarget as HTMLFormElement).reset();
+    if (res.ok) {
+      form.reset();
+      notify('Password admin berhasil diubah.');
+    } else {
+      notify(res.error || 'Gagal mengubah password.', 'error');
+    }
   }
 
   async function handleLogout() {
@@ -146,6 +217,25 @@ export default function AdminDashboard({ pairs, news, accounts, total, byAccount
           </button>
         </div>
       </header>
+
+      {/* Feedback Alert Banner */}
+      {feedback && (
+        <div
+          className={`mt-4 flex items-center justify-between rounded-xl px-4 py-3 text-sm font-semibold shadow-sm transition-all ${
+            feedback.type === 'error'
+              ? 'border border-red-200 bg-red-50 text-red-700'
+              : 'border border-emerald-200 bg-emerald-50 text-emerald-800'
+          }`}
+        >
+          <span>{feedback.type === 'error' ? '⚠️ ' : '✓ '}{feedback.text}</span>
+          <button
+            onClick={() => setFeedback(null)}
+            className="text-xs font-bold opacity-60 hover:opacity-100"
+          >
+            ✕
+          </button>
+        </div>
+      )}
 
       {/* Tab nav */}
       <nav className="mt-6 flex flex-wrap gap-2">
@@ -181,8 +271,13 @@ export default function AdminDashboard({ pairs, news, accounts, total, byAccount
                     onSubmit={async (e) => {
                       e.preventDefault();
                       const fd = new FormData(e.currentTarget as HTMLFormElement);
-                      await savePairAction(fd);
-                      refresh();
+                      const res = await savePairAction(fd);
+                      if (res.ok) {
+                        notify(`Data Pasangan #${num} berhasil disimpan.`);
+                        refresh();
+                      } else {
+                        notify(res.error || 'Gagal menyimpan pasangan.', 'error');
+                      }
                     }}
                     className="grid gap-2 rounded-xl border border-slate-50 p-3 sm:grid-cols-2"
                   >
@@ -245,8 +340,13 @@ export default function AdminDashboard({ pairs, news, accounts, total, byAccount
                             if (!confirm('Hapus pasangan ini?')) return;
                             const fd = new FormData();
                             fd.set('id', String(p.id));
-                            await deletePairAction(fd);
-                            refresh();
+                            const res = await deletePairAction(fd);
+                            if (res.ok) {
+                              notify(`Pasangan #${num} berhasil dihapus.`);
+                              refresh();
+                            } else {
+                              notify(res.error || 'Gagal menghapus pasangan.', 'error');
+                            }
                           }}
                           className="rounded-lg border border-red-200 px-3 py-1.5 text-sm font-semibold text-red-600 hover:bg-red-50"
                         >
@@ -273,10 +373,15 @@ export default function AdminDashboard({ pairs, news, accounts, total, byAccount
                 fd.set('body', newsEdit.body);
                 fd.set('cover_url', coverDraft || newsEdit.cover_url || '');
                 fd.set('published', 'on');
-                await saveNewsAction(fd);
-                refresh();
-                setNewsEdit({ title: '', body: '', cover_url: '' });
-                setCoverDraft('');
+                const res = await saveNewsAction(fd);
+                if (res.ok) {
+                  notify(newsEdit.id ? 'Perubahan berita berhasil disimpan.' : 'Berita baru berhasil ditambahkan.');
+                  refresh();
+                  setNewsEdit({ title: '', body: '', cover_url: '' });
+                  setCoverDraft('');
+                } else {
+                  notify(res.error || 'Gagal menyimpan berita.', 'error');
+                }
               }}
               className="mt-4 space-y-2 rounded-xl border border-slate-50 p-3"
             >
@@ -385,8 +490,13 @@ export default function AdminDashboard({ pairs, news, accounts, total, byAccount
                           if (!confirm('Hapus berita?')) return;
                           const fd = new FormData();
                           fd.set('id', String(n.id));
-                          await deleteNewsAction(fd);
-                          refresh();
+                          const res = await deleteNewsAction(fd);
+                          if (res.ok) {
+                            notify('Berita berhasil dihapus.');
+                            refresh();
+                          } else {
+                            notify(res.error || 'Gagal menghapus berita.', 'error');
+                          }
                         }}
                         className="text-xs font-semibold text-red-600 underline"
                       >
@@ -401,37 +511,242 @@ export default function AdminDashboard({ pairs, news, accounts, total, byAccount
         )}
 
         {active === 'tokens' && (
-          <div>
-            <h2 className="font-bold text-[#0b1f4b]">Token Pemilih (Rahasia)</h2>
-            <p className="mt-1 text-sm text-slate-600">
-              Hanya admin yang bisa membuat & melihat token. Token diberikan ke pemilih untuk login
-              ke salah satu dari 3 akun.
-            </p>
-            <div className="mt-4 space-y-2">
-              {accounts.map((a) => {
-                const votes = byAccount.find((b) => b.account_id === a.id)?.count || 0;
-                return (
-                  <div key={a.id} className="flex items-center justify-between rounded-xl border border-slate-50 p-3">
-                    <div>
-                      <p className="font-semibold text-[#0b1f4b]">{a.label}</p>
-                      <p className="text-xs text-slate-500">
-                        {a.has_token ? `Hint: ${a.token_hint}•••• · ${votes} suara` : 'Token belum dibuat'}
-                      </p>
-                    </div>
-                    <button
-                      onClick={() => handleCreateToken(a.id)}
-                      className="rounded-lg bg-[#0b1f4b] px-4 py-1.5 text-sm font-bold text-white hover:bg-[#142c63]"
-                    >
-                      {a.has_token ? 'Buat Ulang' : 'Buat Token'}
-                    </button>
-                  </div>
-                );
-              })}
+          <div className="space-y-6">
+            <div>
+              <h2 className="font-bold text-[#0b1f4b]">Daftar Pemilih Tetap (DPT) &amp; Token Massal</h2>
+              <p className="mt-1 text-sm text-slate-600">
+                Generate kode token unik untuk pemilih (misal 1 s.d. 300), lalu unduh ke Excel (CSV)
+                atau cetak kartu/slip pemilih untuk dibagikan saat registrasi.
+              </p>
             </div>
-            <button onClick={handleResetAllTokens}
-              className="mt-4 rounded-lg border border-slate-200 px-4 py-2 text-sm font-semibold text-[#0b1f4b] hover:bg-slate-50">
-              Buat Ulang Semua Token
-            </button>
+
+            {/* Form Generator Token 1-300 */}
+            <div className="rounded-2xl border border-[#b0892f]/30 bg-[#fbf8f2] p-5 shadow-sm">
+              <h3 className="text-sm font-bold text-[#0b1f4b]">⚡ Generator Token Pemilih (1 s.d. 300)</h3>
+              <form onSubmit={handleGenerateVoters} className="mt-3 flex flex-wrap items-end gap-3">
+                <div>
+                  <label className="text-xs font-semibold text-slate-600">No. Urut Awal</label>
+                  <input
+                    type="number"
+                    min={1}
+                    value={genFrom}
+                    onChange={(e) => setGenFrom(Number(e.target.value))}
+                    className="mt-1 w-28 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-semibold focus:border-[#0b1f4b] focus:outline-none"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-semibold text-slate-600">No. Urut Akhir</label>
+                  <input
+                    type="number"
+                    min={genFrom}
+                    value={genTo}
+                    onChange={(e) => setGenTo(Number(e.target.value))}
+                    className="mt-1 w-28 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-semibold focus:border-[#0b1f4b] focus:outline-none"
+                    required
+                  />
+                </div>
+                <button
+                  type="submit"
+                  disabled={genBusy}
+                  className="rounded-lg bg-[#0b1f4b] px-5 py-2 text-sm font-bold text-white shadow-sm hover:bg-[#142c63] disabled:opacity-50"
+                >
+                  {genBusy ? 'Membuat Token…' : `⚡ Generate ${Math.max(0, genTo - genFrom + 1)} Token`}
+                </button>
+              </form>
+
+              {/* Action Bar: Download Excel & Cetak */}
+              <div className="mt-4 flex flex-wrap items-center gap-3 border-t border-[#0b1f4b]/10 pt-4">
+                <a
+                  href="/api/export-voters?format=csv"
+                  className="inline-flex items-center gap-2 rounded-lg bg-[#2e7d32] px-4 py-2 text-xs font-bold text-white shadow-sm hover:bg-[#1b5e20]"
+                >
+                  <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                  </svg>
+                  📥 Unduh File Excel (CSV)
+                </a>
+                <a
+                  href="/admin/cetak-token"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center gap-2 rounded-lg border border-[#0b1f4b] bg-white px-4 py-2 text-xs font-bold text-[#0b1f4b] shadow-sm hover:bg-slate-50"
+                >
+                  <svg className="h-4 w-4 text-[#b0892f]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+                  </svg>
+                  🖨️ Cetak Slip Token (PDF / Siap Potong)
+                </a>
+                {voters.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={handleResetVoters}
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-red-200 bg-white px-3 py-2 text-xs font-semibold text-red-600 hover:bg-red-50"
+                  >
+                    🗑️ Reset Semua Token DPT
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Statistik DPT Ringkas */}
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+              <div className="rounded-xl border border-slate-100 bg-slate-50 p-3.5 text-center">
+                <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">Total DPT</span>
+                <p className="mt-1 font-mono text-2xl font-extrabold text-[#0b1f4b]">{votersStats.total}</p>
+              </div>
+              <div className="rounded-xl border border-emerald-100 bg-emerald-50/70 p-3.5 text-center">
+                <span className="text-[11px] font-semibold uppercase tracking-wider text-emerald-700">Sudah Memilih</span>
+                <p className="mt-1 font-mono text-2xl font-extrabold text-emerald-800">{votersStats.used}</p>
+              </div>
+              <div className="rounded-xl border border-amber-100 bg-amber-50/70 p-3.5 text-center">
+                <span className="text-[11px] font-semibold uppercase tracking-wider text-amber-700">Belum Memilih</span>
+                <p className="mt-1 font-mono text-2xl font-extrabold text-amber-800">{votersStats.unused}</p>
+              </div>
+              <div className="rounded-xl border border-slate-100 bg-slate-50 p-3.5 text-center">
+                <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">Partisipasi</span>
+                <p className="mt-1 font-mono text-2xl font-extrabold text-[#0b1f4b]">{votersStats.turnout}%</p>
+              </div>
+            </div>
+
+            {/* Tabel Pencarian & Filter DPT */}
+            <div className="rounded-xl border border-slate-100 bg-white p-4 shadow-sm">
+              <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
+                <div className="flex items-center gap-1.5">
+                  {(['all', 'unused', 'used'] as const).map((f) => (
+                    <button
+                      key={f}
+                      onClick={() => setVoterFilter(f)}
+                      className={`rounded-lg px-3 py-1.5 text-xs font-semibold ${
+                        voterFilter === f
+                          ? 'bg-[#0b1f4b] text-white'
+                          : 'border border-slate-200 bg-white text-slate-600 hover:bg-slate-50'
+                      }`}
+                    >
+                      {f === 'all' && `Semua (${voters.length})`}
+                      {f === 'unused' && `Belum Memilih (${votersStats.unused})`}
+                      {f === 'used' && `Sudah Memilih (${votersStats.used})`}
+                    </button>
+                  ))}
+                </div>
+                <input
+                  type="text"
+                  placeholder="Cari nomor pemilih atau token…"
+                  value={voterSearch}
+                  onChange={(e) => setVoterSearch(e.target.value)}
+                  className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs focus:border-[#0b1f4b] focus:outline-none sm:w-64"
+                />
+              </div>
+
+              {/* Tabel daftar token */}
+              <div className="mt-4 max-h-96 overflow-y-auto rounded-lg border border-slate-100">
+                {(() => {
+                  const filtered = voters.filter((v) => {
+                    if (voterFilter === 'used' && v.is_used !== 1) return false;
+                    if (voterFilter === 'unused' && v.is_used === 1) return false;
+                    if (voterSearch) {
+                      const q = voterSearch.toLowerCase();
+                      return (
+                        String(v.voter_no).includes(q) ||
+                        v.token.toLowerCase().includes(q) ||
+                        v.name.toLowerCase().includes(q)
+                      );
+                    }
+                    return true;
+                  });
+
+                  if (filtered.length === 0) {
+                    return (
+                      <div className="p-8 text-center text-xs text-slate-400">
+                        {voters.length === 0
+                          ? 'Belum ada token pemilih. Klik "Generate Token" di atas untuk membuat token 1-300.'
+                          : 'Tidak ada pemilih yang cocok dengan filter atau kata kunci.'}
+                      </div>
+                    );
+                  }
+
+                  return (
+                    <table className="w-full text-left text-xs">
+                      <thead className="sticky top-0 bg-slate-50 text-[11px] font-bold text-slate-600">
+                        <tr>
+                          <th className="px-3 py-2.5">No. Urut</th>
+                          <th className="px-3 py-2.5">Nama / Identitas</th>
+                          <th className="px-3 py-2.5">Kode Token</th>
+                          <th className="px-3 py-2.5">Status</th>
+                          <th className="px-3 py-2.5">Waktu Mencoblos</th>
+                          <th className="px-3 py-2.5">Bilik Suara</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {filtered.map((v) => (
+                          <tr key={v.id} className="hover:bg-slate-50/70">
+                            <td className="px-3 py-2 font-mono font-bold text-[#0b1f4b]">
+                              #{String(v.voter_no).padStart(3, '0')}
+                            </td>
+                            <td className="px-3 py-2 text-slate-700">{v.name}</td>
+                            <td className="px-3 py-2 font-mono text-sm font-extrabold tracking-widest text-[#0b1f4b]">
+                              {v.token}
+                            </td>
+                            <td className="px-3 py-2">
+                              {v.is_used === 1 ? (
+                                <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-bold text-emerald-800">
+                                  ✓ Sudah Memilih
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold text-amber-800">
+                                  ● Belum Memilih
+                                </span>
+                              )}
+                            </td>
+                            <td className="px-3 py-2 text-slate-500">
+                              {v.used_at ? new Date(v.used_at.replace(' ', 'T') + 'Z').toLocaleTimeString('id-ID') : '—'}
+                            </td>
+                            <td className="px-3 py-2 text-slate-600">
+                              {v.used_booth ? `Bilik ${v.used_booth}` : '—'}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  );
+                })()}
+              </div>
+            </div>
+
+            {/* Opsi Bilik Suara Fisik (Akun 1, 2, 3) */}
+            <div className="rounded-xl border border-slate-100 bg-slate-50/60 p-4">
+              <h3 className="text-xs font-bold text-slate-700">Token Bilik Fisik Alternatif (Akun 1, 2, 3)</h3>
+              <p className="mt-0.5 text-[11px] text-slate-500">
+                Mode darurat manual untuk mengunci perangkat bilik tanpa DPT massal.
+              </p>
+              <div className="mt-3 grid gap-2 sm:grid-cols-3">
+                {accounts.map((a) => {
+                  const votes = byAccount.find((b) => b.account_id === a.id)?.count || 0;
+                  return (
+                    <div key={a.id} className="flex items-center justify-between rounded-lg border border-slate-200 bg-white p-2.5">
+                      <div>
+                        <p className="text-xs font-bold text-[#0b1f4b]">{a.label}</p>
+                        <p className="text-[10px] text-slate-500">
+                          {a.has_token ? `Hint: ${a.token_hint}•••• · ${votes} suara` : 'Kosong'}
+                        </p>
+                      </div>
+                      <button
+                        onClick={() => handleCreateToken(a.id)}
+                        className="rounded bg-[#0b1f4b] px-2.5 py-1 text-xs font-semibold text-white hover:bg-[#142c63]"
+                      >
+                        {a.has_token ? 'Reset' : 'Buat'}
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+              <button
+                onClick={handleResetAllTokens}
+                className="mt-3 text-xs font-semibold text-slate-500 underline hover:text-[#0b1f4b]"
+              >
+                Reset Semua Token Akun Bilik Fisik
+              </button>
+            </div>
           </div>
         )}
 
@@ -556,8 +871,13 @@ export default function AdminDashboard({ pairs, news, accounts, total, byAccount
               onSubmit={async (e) => {
                 e.preventDefault();
                 const fd = new FormData(e.currentTarget as HTMLFormElement);
-                await saveRulesAction(fd);
-                refresh();
+                const res = await saveRulesAction(fd);
+                if (res.ok) {
+                  notify('Panduan pemilos berhasil diperbarui.');
+                  refresh();
+                } else {
+                  notify(res.error || 'Gagal menyimpan panduan.', 'error');
+                }
               }}
               className="mt-4 space-y-3"
             >
@@ -617,15 +937,19 @@ export default function AdminDashboard({ pairs, news, accounts, total, byAccount
                 const nextLogo = logoDraft || settings.logo_url || '';
                 fd.set('logo_url', nextLogo);
                 fd.set('mascot_url', mascotDraft || settings.mascot_url || '');
-                await saveSettingsAction(fd);
-                setBrandMsg(
-                  nextLogo
-                    ? 'Branding tersimpan. Logo sudah diganti & tampil di beranda + nav.'
-                    : 'Branding tersimpan. Logo dikosongkan (beranda pakai teks BAWASLOS).'
-                );
-                setLogoDraft('');
-                setMascotDraft('');
-                refresh();
+                const res = await saveSettingsAction(fd);
+                if (res.ok) {
+                  notify(
+                    nextLogo
+                      ? 'Branding tersimpan. Logo berhasil diganti & tampil di seluruh halaman.'
+                      : 'Branding tersimpan. Logo dikosongkan.'
+                  );
+                  setLogoDraft('');
+                  setMascotDraft('');
+                  refresh();
+                } else {
+                  notify(res.error || 'Gagal menyimpan branding.', 'error');
+                }
               }}
               className="rounded-xl border border-slate-50 p-3"
             >
