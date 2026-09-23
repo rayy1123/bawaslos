@@ -1,6 +1,6 @@
 // Semua akses data & logika inti voting. Dipakai oleh Server Actions & route handlers.
 import { getDb } from './db';
-import { hashToken, verifyToken } from './auth';
+import { hashToken, verifyToken, generateToken } from './auth';
 
 // node:sqlite mengembalikan row sebagai object dengan null prototype.
 // Next tidak bisa menserialisasi itu ke Client Component, jadi kita
@@ -49,6 +49,17 @@ export type VoteRow = {
   created_at: string;
 };
 
+export type VoterRecord = {
+  id: number;
+  voter_no: number;
+  name: string;
+  token: string;
+  is_used: number;
+  used_at: string | null;
+  used_booth: number | null;
+  created_at: string;
+};
+
 // ---------- ACCOUNTS ----------
 export function listAccounts(): Account[] {
   const db = getDb();
@@ -78,10 +89,8 @@ export function getAccountWithToken(accountId: number) {
 // (hanya sekali tampil di layar admin).
 export function setAccountToken(accountId: number): string {
   const db = getDb();
+  const plain = generateToken(8);
   const crypto = require('node:crypto') as typeof import('node:crypto');
-  const plain = Array.from(crypto.randomBytes(10))
-    .map((b) => 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'[b % 24])
-    .join('');
   const salt = crypto.randomBytes(16).toString('hex');
   const hash = crypto.scryptSync(plain, salt, 64).toString('hex');
   // token_hash menyimpan "salt:hash"; token_hint hanya 4 digit awal untuk konfirmasi admin.
@@ -203,7 +212,7 @@ export function deleteNews(id: number) {
 // ---------- VOTES (logika inti) ----------
 // Menjatuhkan satu suara. Nomor urut GLOBAL diambil dari MAX(voter_no)+1,
 // sehingga Pemilih 1,2,3,... terus naik LINTAS akun.
-export function castVote(accountId: number, pairId: number): { voter_no: number } {
+export function castVote(accountId: number, pairId: number, voterId?: number): { voter_no: number } {
   const db = getDb();
   // node:sqlite tidak punya wrapper .transaction(); pakai BEGIN/COMMIT manual
   // agar pengambilan nomor urut & insert atomik (tidak ada nomor kembar).
@@ -218,7 +227,19 @@ export function castVote(accountId: number, pairId: number): { voter_no: number 
       accountId,
       pairId
     );
-    audit('VOTE', `Pemilih ke-${nextNo} dari ${accountId} memilih pasangan ${pairId}`, accountId);
+    // Hancurkan token akun agar tidak bisa digunakan kembali (single-use token)
+    db.prepare('UPDATE accounts SET token_hash = NULL, token_hint = NULL WHERE id = ?').run(accountId);
+    db.prepare('DELETE FROM voter_sessions WHERE account_id = ?').run(accountId);
+
+    // Jika pemilih menggunakan token DPT / massal, tandai sudah memilih
+    if (voterId) {
+      db.prepare('UPDATE voters SET is_used = 1, used_at = datetime(\'now\'), used_booth = ? WHERE id = ?').run(
+        accountId,
+        voterId
+      );
+    }
+
+    audit('VOTE', `Pemilih ke-${nextNo} dari Bilik ${accountId} memilih pasangan ${pairId}`, accountId);
     db.exec('COMMIT');
     return { voter_no: nextNo };
   } catch (e) {
@@ -246,7 +267,26 @@ export function tally(): { pair_id: number; number: number; chair_name: string; 
   );
 }
 
-// Seluruh suara berurutan (untuk reveal dramatis di scoreboard).
+// Rekap perolehan suara terungkap secara aman (hanya agregasi per paslon, tanpa data pemilih individual)
+export function revealedTally(revealedCount: number): { pair_id: number; number: number; chair_name: string; vice_name: string; photo_url: string; votes: number }[] {
+  const db = getDb();
+  return plain(
+    db
+      .prepare(
+        `SELECT p.id AS pair_id, p.number, p.chair_name, p.vice_name, p.photo_url,
+              COALESCE((
+                SELECT COUNT(*) FROM (
+                  SELECT pair_id FROM votes ORDER BY voter_no ASC LIMIT ?
+                ) v WHERE v.pair_id = p.id
+              ),0) AS votes
+       FROM pairs p
+       ORDER BY p.number`
+      )
+      .all(Math.max(0, revealedCount)) as { pair_id: number; number: number; chair_name: string; vice_name: string; photo_url: string; votes: number }[]
+  );
+}
+
+// Seluruh suara berurutan (untuk audit internal / verifikasi admin).
 export function voteTimeline(): VoteRow[] {
   const db = getDb();
   return plain(
@@ -373,4 +413,115 @@ export function getRules(): Rules {
 
 export function saveRules(headline: string, body: string) {
   getDb().prepare('UPDATE rules SET headline = ?, body = ? WHERE id = 1').run(headline, body);
+}
+
+// ---------- DAFTAR PEMILIH TETAP / TOKEN MASSAL (1-300 dst) ----------
+
+export function generateVotersBatch(fromNo: number, toNo: number): { count: number; start: number; end: number } {
+  const db = getDb();
+  const start = Math.max(1, Math.floor(fromNo));
+  const end = Math.max(start, Math.floor(toNo));
+  db.exec('BEGIN');
+  try {
+    const insert = db.prepare(`
+      INSERT INTO voters (voter_no, name, token, is_used, used_at, used_booth)
+      VALUES (?, ?, ?, 0, NULL, NULL)
+      ON CONFLICT(voter_no) DO UPDATE SET
+        token = excluded.token,
+        is_used = 0,
+        used_at = NULL,
+        used_booth = NULL
+    `);
+    let count = 0;
+    for (let n = start; n <= end; n++) {
+      const token = generateToken(8);
+      const padNo = String(n).padStart(3, '0');
+      const name = `Pemilih ${padNo}`;
+      insert.run(n, name, token);
+      count++;
+    }
+    audit('VOTERS_GENERATED', `Generate ${count} token pemilih (No. Urut ${start} - ${end})`);
+    db.exec('COMMIT');
+    return { count, start, end };
+  } catch (e) {
+    db.exec('ROLLBACK');
+    throw e;
+  }
+}
+
+export function listVoters(options?: {
+  filter?: 'all' | 'used' | 'unused';
+  search?: string;
+  limit?: number;
+  offset?: number;
+}): { voters: VoterRecord[]; total: number; used: number; unused: number } {
+  const db = getDb();
+  const filter = options?.filter || 'all';
+  const search = options?.search ? options.search.trim() : '';
+  const limit = options?.limit ?? 1000;
+  const offset = options?.offset ?? 0;
+
+  const statRow = db.prepare(`
+    SELECT
+      COUNT(*) AS total,
+      COALESCE(SUM(CASE WHEN is_used = 1 THEN 1 ELSE 0 END), 0) AS used
+    FROM voters
+  `).get() as { total: number; used: number };
+
+  const total = statRow.total;
+  const used = statRow.used;
+  const unused = total - used;
+
+  let query = 'SELECT * FROM voters WHERE 1=1';
+  const params: (string | number)[] = [];
+
+  if (filter === 'used') {
+    query += ' AND is_used = 1';
+  } else if (filter === 'unused') {
+    query += ' AND is_used = 0';
+  }
+
+  if (search) {
+    query += ' AND (voter_no = ? OR token LIKE ? OR name LIKE ?)';
+    const numSearch = Number(search) || -1;
+    params.push(numSearch, `%${search}%`, `%${search}%`);
+  }
+
+  query += ' ORDER BY voter_no ASC LIMIT ? OFFSET ?';
+  params.push(limit, offset);
+
+  const voters = plain(db.prepare(query).all(...params) as VoterRecord[]);
+  return { voters, total, used, unused };
+}
+
+export function getVoterByToken(token: string): VoterRecord | undefined {
+  const db = getDb();
+  const clean = token.trim().toUpperCase();
+  return plainOne(db.prepare('SELECT * FROM voters WHERE UPPER(token) = ?').get(clean) as VoterRecord | undefined);
+}
+
+export function getVoterById(id: number): VoterRecord | undefined {
+  const db = getDb();
+  return plainOne(db.prepare('SELECT * FROM voters WHERE id = ?').get(id) as VoterRecord | undefined);
+}
+
+export function getVotersStats(): { total: number; used: number; unused: number; turnout: number } {
+  const db = getDb();
+  const stat = db.prepare(`
+    SELECT
+      COUNT(*) AS total,
+      COALESCE(SUM(CASE WHEN is_used = 1 THEN 1 ELSE 0 END), 0) AS used
+    FROM voters
+  `).get() as { total: number; used: number };
+  const total = stat.total;
+  const used = stat.used;
+  const unused = total - used;
+  const turnout = total > 0 ? Math.round((used / total) * 100) : 0;
+  return { total, used, unused, turnout };
+}
+
+export function resetAllVoters(): void {
+  const db = getDb();
+  db.prepare('DELETE FROM voters').run();
+  audit('VOTERS_RESET', 'Seluruh data token pemilih massal dihapus');
 }

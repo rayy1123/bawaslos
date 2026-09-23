@@ -110,6 +110,20 @@ function createSchema(db: DatabaseSync) {
       headline    TEXT NOT NULL DEFAULT 'Peraturan & Tata Cara Pemilihan',
       body        TEXT NOT NULL DEFAULT ''
     );
+
+    -- Daftar Pemilih (DPT / batch token 1-300 dst untuk cetak Excel/slip)
+    CREATE TABLE IF NOT EXISTS voters (
+      id          INTEGER PRIMARY KEY AUTOINCREMENT,
+      voter_no    INTEGER NOT NULL UNIQUE,     -- 1, 2, 3, ... (1-300)
+      name        TEXT NOT NULL DEFAULT '',    -- misal "Pemilih 001"
+      token       TEXT NOT NULL UNIQUE,        -- 8 karakter acak unik
+      is_used     INTEGER NOT NULL DEFAULT 0,  -- 0 = belum, 1 = sudah
+      used_at     TEXT,                        -- waktu mencoblos
+      used_booth  INTEGER,                     -- bilik 1, 2, atau 3
+      created_at  TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_voters_token ON voters(token);
+    CREATE INDEX IF NOT EXISTS idx_voters_no ON voters(voter_no);
   `);
 }
 
@@ -188,4 +202,19 @@ function migrate(db: DatabaseSync) {
   const sbCols = db.prepare('PRAGMA table_info(scoreboard_state)').all() as { name: string }[];
   const sbHas = (c: string) => sbCols.some((x) => x.name === c);
   if (!sbHas('voting_open')) db.prepare('ALTER TABLE scoreboard_state ADD COLUMN voting_open INTEGER NOT NULL DEFAULT 1').run();
+
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS voters (
+      id          INTEGER PRIMARY KEY AUTOINCREMENT,
+      voter_no    INTEGER NOT NULL UNIQUE,
+      name        TEXT NOT NULL DEFAULT '',
+      token       TEXT NOT NULL UNIQUE,
+      is_used     INTEGER NOT NULL DEFAULT 0,
+      used_at     TEXT,
+      used_booth  INTEGER,
+      created_at  TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_voters_token ON voters(token);
+    CREATE INDEX IF NOT EXISTS idx_voters_no ON voters(voter_no);
+  `);
 }

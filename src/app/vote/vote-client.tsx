@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { voterLoginAction, castVoteAction, voterLogoutAction } from '@/lib/actions';
@@ -30,6 +30,7 @@ export default function VoteClient({ pairs, accounts, voterAccount, logoUrl, vot
   const [votedNo, setVotedNo] = useState<number | null>(null);
   const [voteBusy, setVoteBusy] = useState(false);
   const [voteErr, setVoteErr] = useState('');
+  const [countdown, setCountdown] = useState(6);
 
   const currentStage =
     completedNo != null
@@ -39,6 +40,22 @@ export default function VoteClient({ pairs, accounts, voterAccount, logoUrl, vot
         : votedNo != null
           ? 'completed'
           : 'voting';
+
+  useEffect(() => {
+    if (currentStage !== 'completed') return;
+    setCountdown(6);
+    const timer = setInterval(() => {
+      setCountdown((prev) => {
+        if (prev <= 1) {
+          clearInterval(timer);
+          router.push('/vote');
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [currentStage, router]);
 
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault();
@@ -127,23 +144,21 @@ export default function VoteClient({ pairs, accounts, voterAccount, logoUrl, vot
         {currentStage === 'login' ? (
           // ----- LOGIN -----
           <section className="mx-auto mt-6 max-w-md rounded-2xl border border-slate-200 bg-white p-6 shadow-md">
-            <h2 className="text-lg font-bold text-[#0b1f4b]">Masuk dengan Token</h2>
+            <h2 className="text-lg font-bold text-[#0b1f4b]">Masuk Bilik Suara</h2>
             <p className="mt-1 text-sm text-slate-600">
-              Pilih akun pemilih yang disediakan, lalu masukkan token yang diberikan admin pengawas.
+              Pilih terminal bilik suara tempat Anda berada, lalu masukkan kode token yang tertera pada slip pemilih Anda.
             </p>
             <form onSubmit={handleLogin} className="mt-4 space-y-3">
               <div>
-                <label className="block text-sm font-medium text-slate-700">Akun Pemilih</label>
+                <label className="block text-sm font-medium text-slate-700">Terminal / Bilik Suara</label>
                 <select
                   value={accountId}
                   onChange={(e) => setAccountId(Number(e.target.value))}
-                  className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-[#0b1f4b] focus:outline-none"
+                  className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-50 px-3 py-2 text-sm font-semibold text-[#0b1f4b] focus:border-[#0b1f4b] focus:outline-none"
                 >
-                  {accounts.map((a) => (
-                    <option key={a.id} value={a.id} disabled={!a.has_token}>
-                      {a.label} {a.has_token ? '' : '(token belum dibuat)'}
-                    </option>
-                  ))}
+                  <option value={1}>Bilik Suara 1</option>
+                  <option value={2}>Bilik Suara 2</option>
+                  <option value={3}>Bilik Suara 3</option>
                 </select>
               </div>
               <div>
@@ -151,7 +166,8 @@ export default function VoteClient({ pairs, accounts, voterAccount, logoUrl, vot
                 <input
                   value={token}
                   onChange={(e) => setToken(e.target.value.toUpperCase())}
-                  placeholder="16 huruf/angka"
+                  placeholder="8 karakter token"
+                  maxLength={12}
                   className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm uppercase tracking-widest focus:border-[#0b1f4b] focus:outline-none"
                   autoFocus
                 />
@@ -226,7 +242,7 @@ export default function VoteClient({ pairs, accounts, voterAccount, logoUrl, vot
               Pilihan bersifat rahasia dan final. Sesi telah berakhir.
             </p>
             <div className="mt-4 rounded-lg border border-[#b0892f] bg-[#fbf6ea] px-4 py-3 text-sm text-[#0b1f4b]">
-              Untuk memasukkan token akun berikutnya, silakan kembali ke halaman voting.
+              Bilik suara akan otomatis kembali ke halaman login pemilih dalam <b className="font-mono text-base">{countdown}</b> detik untuk pemilih berikutnya.
             </div>
             <div className="mt-5 flex flex-wrap justify-center gap-3">
               <Link href="/vote" className="rounded-lg bg-[#0b1f4b] px-5 py-2 text-sm font-bold text-white hover:bg-[#142c63]">
