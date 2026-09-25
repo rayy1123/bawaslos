@@ -10,8 +10,8 @@ export const dynamic = 'force-dynamic';
 export default async function CetakTokenPage() {
   if (!(await isAdmin())) redirect('/admin/login');
 
-  const { voters, total } = listVoters({ limit: 10000 });
-  const settings = getSettings();
+  const { voters, total } = await listVoters({ limit: 10000 });
+  const settings = await getSettings();
 
   return (
     <div className="min-h-screen bg-slate-100 p-4 font-sans print:bg-white print:p-0">

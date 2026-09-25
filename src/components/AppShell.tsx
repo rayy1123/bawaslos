@@ -4,7 +4,7 @@ import LogoSeal from '@/components/LogoSeal';
 import SiteNav from '@/components/SiteNav';
 
 export default async function AppShell({ children }: { children: React.ReactNode }) {
-  const settings = getSettings();
+  const settings = await getSettings();
 
   return (
     <div className="flex min-h-screen flex-col bg-[#f6f3ec]">

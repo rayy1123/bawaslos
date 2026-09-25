@@ -200,6 +200,7 @@ export default function VoteClient({ pairs, accounts, voterAccount, logoUrl, vot
                 <div key={p.id} className="pair-card flex flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-md">
                   <div className="relative">
                     {p.photo_url ? (
+                      /* eslint-disable-next-line @next/next/no-img-element */
                       <img src={p.photo_url} alt={`Pasangan ${p.number}`} className="h-44 w-full object-cover" />
                     ) : (
                       <div className="flex h-44 w-full items-center justify-center bg-slate-100 text-4xl font-extrabold text-slate-300">

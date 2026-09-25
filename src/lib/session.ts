@@ -1,15 +1,20 @@
 // Manajemen cookie sesi (admin & voter) via next/headers cookies().
 import { cookies } from 'next/headers';
 import { signAdminSession, verifyAdminSession, signVoterSession, verifyVoterSession } from './auth';
-import { getDb } from './db';
+import { ensureDb } from './db';
 import { verifyToken } from './auth';
+import { getVoterByToken, getVoterById } from './queries';
 
 const ADMIN_COOKIE = 'bawaslos_admin';
 const VOTER_COOKIE = 'bawaslos_voter';
 
 export async function adminLogin(username: string, password: string): Promise<boolean> {
-  const db = getDb();
-  const row = db.prepare('SELECT * FROM admin WHERE id = 1').get() as
+  const db = await ensureDb();
+  const res = await db.execute({
+    sql: 'SELECT * FROM admin WHERE id = 1',
+    args: [],
+  });
+  const row = res.rows[0] as unknown as
     | { username: string; password_hash: string; salt: string }
     | undefined;
   if (!row) return false;
@@ -39,8 +44,6 @@ export async function isAdmin(): Promise<boolean> {
   return token ? verifyAdminSession(token) : false;
 }
 
-import { getVoterByToken, getVoterById } from './queries';
-
 export type ActiveVoter = {
   accountId: number;
   voterId?: number;
@@ -56,7 +59,7 @@ export async function voterLogin(
   const clean = token.trim().toUpperCase();
 
   // 1. Cek pada daftar pemilih massal / DPT (1-300 dst)
-  const voter = getVoterByToken(clean);
+  const voter = await getVoterByToken(clean);
   if (voter) {
     if (voter.is_used === 1) {
       return {
@@ -75,10 +78,12 @@ export async function voterLogin(
   }
 
   // 2. Fallback: cek akun tetap bilik (Akun 1, 2, 3)
-  const db = getDb();
-  const acc = db
-    .prepare('SELECT id, token_hash FROM accounts WHERE id = ?')
-    .get(accountId) as { id: number; token_hash: string | null } | undefined;
+  const db = await ensureDb();
+  const accRes = await db.execute({
+    sql: 'SELECT id, token_hash FROM accounts WHERE id = ?',
+    args: [accountId],
+  });
+  const acc = accRes.rows[0] as unknown as { id: number; token_hash: string | null } | undefined;
   if (acc && acc.token_hash) {
     const [salt, hash] = String(acc.token_hash).includes(':')
       ? String(acc.token_hash).split(':')
@@ -116,7 +121,7 @@ export async function currentVoterSession(): Promise<ActiveVoter | null> {
     const [, idStr, boothStr] = payload.split(':');
     const voterId = Number(idStr);
     const boothId = Number(boothStr) || 1;
-    const voter = getVoterById(voterId);
+    const voter = await getVoterById(voterId);
     if (!voter || voter.is_used === 1) {
       await voterLogout();
       return null;
@@ -137,8 +142,9 @@ export async function currentVoterSession(): Promise<ActiveVoter | null> {
   }
 
   // Fallback token lama
-  const db = getDb();
-  const accs = db.prepare('SELECT id, token_hash FROM accounts').all() as {
+  const db = await ensureDb();
+  const accsRes = await db.execute('SELECT id, token_hash FROM accounts');
+  const accs = accsRes.rows as unknown as {
     id: number;
     token_hash: string | null;
   }[];

@@ -6,7 +6,7 @@ import AppShell from '@/components/AppShell';
 export const dynamic = 'force-dynamic';
 
 export default async function PublicScoreboardPage() {
-  const state = getScoreboardState();
+  const state = await getScoreboardState();
   const total = state.total;
   // Publik hanya boleh melihat bila admin mem-publish.
   if (!state.published) {
@@ -27,7 +27,7 @@ export default async function PublicScoreboardPage() {
     );
   }
   // Hanya suara yang sudah di-reveal oleh admin yang dihitung untuk tampilan publik.
-  const tallyData = revealedTally(state.revealed);
+  const tallyData = await revealedTally(state.revealed);
   return (
     <AppShell>
       <ScoreboardClient

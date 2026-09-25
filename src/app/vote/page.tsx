@@ -10,11 +10,11 @@ export default async function VotePage({
 }: {
   searchParams: { done?: string };
 }) {
-  const pairs = listPairs(true);
-  const accounts = listAccounts();
+  const pairs = await listPairs(true);
+  const accounts = await listAccounts();
   const voterAccount = await currentVoterAccount();
-  const settings = getSettings();
-  const votingOpen = getVotingOpen();
+  const settings = await getSettings();
+  const votingOpen = await getVotingOpen();
   const completedNo = searchParams.done ? Number(searchParams.done) : null;
   return (
     <VoteClient
