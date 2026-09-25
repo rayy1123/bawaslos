@@ -181,12 +181,22 @@ async function migrate(db: Client) {
 export function getDb(): Client {
   if (globalForDb.__bawaslosDb) return globalForDb.__bawaslosDb;
 
-  const url = process.env.TURSO_DATABASE_URL || 'file:.data/bawaslos.db';
+  let url = process.env.TURSO_DATABASE_URL;
   const authToken = process.env.TURSO_AUTH_TOKEN;
+
+  if (!url) {
+    // Di Vercel serverless, hanya folder /tmp yang memiliki akses tulis (writable).
+    // Di lokal, gunakan folder .data di root project.
+    const isVercel = Boolean(process.env.VERCEL);
+    const dbPath = isVercel
+      ? path.join('/tmp', 'bawaslos.db')
+      : path.resolve(process.cwd(), '.data', 'bawaslos.db');
+    url = `file:${dbPath}`;
+  }
 
   if (url.startsWith('file:') && typeof process !== 'undefined') {
     const filePath = url.replace('file:', '');
-    const dir = path.dirname(path.resolve(process.cwd(), filePath));
+    const dir = path.dirname(filePath);
     if (!fs.existsSync(dir)) {
       try {
         fs.mkdirSync(dir, { recursive: true });
@@ -195,9 +205,7 @@ export function getDb(): Client {
   }
 
   const client = createClient({
-    url: url.startsWith('file:') && !path.isAbsolute(url.replace('file:', ''))
-      ? `file:${path.resolve(process.cwd(), url.replace('file:', ''))}`
-      : url,
+    url,
     authToken,
   });
 
