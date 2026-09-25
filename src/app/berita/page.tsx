@@ -16,7 +16,7 @@ function formatDate(iso: string): string {
 }
 
 export default async function BeritaIndexPage() {
-  const news = listNews(true);
+  const news = await listNews(true);
   const featured = news.find((n) => n.featured) ?? null;
   const rest = featured ? news.filter((n) => n.id !== featured.id) : news;
   return (

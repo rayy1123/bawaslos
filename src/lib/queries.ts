@@ -1,15 +1,12 @@
 // Semua akses data & logika inti voting. Dipakai oleh Server Actions & route handlers.
-import { getDb } from './db';
-import { hashToken, verifyToken, generateToken } from './auth';
+import { ensureDb } from './db';
+import { verifyToken, generateToken } from './auth';
 
-// node:sqlite mengembalikan row sebagai object dengan null prototype.
-// Next tidak bisa menserialisasi itu ke Client Component, jadi kita
-// konversi ke plain object di semua fungsi yang mengembalikan data ke UI.
 function plain<T>(rows: T[]): T[] {
   return rows.map((r) => ({ ...(r as object) })) as T[];
 }
 function plainOne<T>(row: T | undefined): T | undefined {
-  return row ? ({ ...(row as object) } as T) : row;
+  return row ? ({ ...(row as object) } as T) : undefined;
 }
 
 export type Pair = {
@@ -61,53 +58,50 @@ export type VoterRecord = {
 };
 
 // ---------- ACCOUNTS ----------
-export function listAccounts(): Account[] {
-  const db = getDb();
-  const rows = db
-    .prepare('SELECT id, label, token_hint, token_hash FROM accounts ORDER BY id')
-    .all() as { id: number; label: string; token_hint: string | null; token_hash: string | null }[];
-  return plain(
-    rows.map((r) => ({
-      id: r.id,
-      label: r.label,
-      token_hint: r.token_hint,
-      has_token: !!r.token_hash,
-    }))
-  );
+export async function listAccounts(): Promise<Account[]> {
+  const db = await ensureDb();
+  const res = await db.execute('SELECT id, label, token_hint, token_hash FROM accounts ORDER BY id');
+  return res.rows.map((r) => ({
+    id: Number(r.id),
+    label: String(r.label),
+    token_hint: r.token_hint ? String(r.token_hint) : null,
+    has_token: !!r.token_hash,
+  }));
 }
 
-export function getAccountWithToken(accountId: number) {
-  const db = getDb();
-  return db
-    .prepare('SELECT id, label, token_hash, token_hint FROM accounts WHERE id = ?')
-    .get(accountId) as
+export async function getAccountWithToken(accountId: number) {
+  const db = await ensureDb();
+  const res = await db.execute({
+    sql: 'SELECT id, label, token_hash, token_hint FROM accounts WHERE id = ?',
+    args: [accountId],
+  });
+  return plainOne(res.rows[0]) as
     | { id: number; label: string; token_hash: string | null; token_hint: string | null }
     | undefined;
 }
 
 // Admin membuat/mengganti token untuk sebuah akun. Mengembalikan token PLAIN
 // (hanya sekali tampil di layar admin).
-export function setAccountToken(accountId: number): string {
-  const db = getDb();
-  const plain = generateToken(8);
+export async function setAccountToken(accountId: number): Promise<string> {
+  const db = await ensureDb();
+  const plainToken = generateToken(8);
   const crypto = require('node:crypto') as typeof import('node:crypto');
   const salt = crypto.randomBytes(16).toString('hex');
-  const hash = crypto.scryptSync(plain, salt, 64).toString('hex');
+  const hash = crypto.scryptSync(plainToken, salt, 64).toString('hex');
   // token_hash menyimpan "salt:hash"; token_hint hanya 4 digit awal untuk konfirmasi admin.
-  db.prepare('UPDATE accounts SET token_hash = ?, token_hint = ? WHERE id = ?').run(
-    salt + ':' + hash,
-    plain.slice(0, 4),
-    accountId
-  );
+  await db.execute({
+    sql: 'UPDATE accounts SET token_hash = ?, token_hint = ? WHERE id = ?',
+    args: [salt + ':' + hash, plainToken.slice(0, 4), accountId],
+  });
   // Catat audit
-  audit('TOKEN_RESET', `Token akun ${accountId} dibuat ulang`, accountId);
-  return plain;
+  await audit('TOKEN_RESET', `Token akun ${accountId} dibuat ulang`, accountId);
+  return plainToken;
 }
 
 // Verifikasi login voter: cocokkan token dengan akun, tandai sesi.
 // Mengembalikan { ok, accountId } atau { ok:false }.
-export function loginVoter(accountId: number, token: string): { ok: boolean; accountId?: number } {
-  const acc = getAccountWithToken(accountId);
+export async function loginVoter(accountId: number, token: string): Promise<{ ok: boolean; accountId?: number }> {
+  const acc = await getAccountWithToken(accountId);
   if (!acc || !acc.token_hash) return { ok: false };
   const [salt, hash] = String(acc.token_hash || '').includes(':')
     ? String(acc.token_hash).split(':')
@@ -117,253 +111,293 @@ export function loginVoter(accountId: number, token: string): { ok: boolean; acc
 }
 
 // ---------- PAIRS ----------
-export function listPairs(activeOnly = false): Pair[] {
-  const db = getDb();
+export async function listPairs(activeOnly = false): Promise<Pair[]> {
+  const db = await ensureDb();
   const sql = activeOnly
     ? 'SELECT * FROM pairs WHERE active = 1 ORDER BY number'
     : 'SELECT * FROM pairs ORDER BY number';
-  return plain(db.prepare(sql).all() as Pair[]);
+  const res = await db.execute(sql);
+  return plain(res.rows as unknown as Pair[]);
 }
 
-export function getPair(id: number): Pair | undefined {
-  const db = getDb();
-  return plainOne(db.prepare('SELECT * FROM pairs WHERE id = ?').get(id) as Pair | undefined);
+export async function getPair(id: number): Promise<Pair | undefined> {
+  const db = await ensureDb();
+  const res = await db.execute({ sql: 'SELECT * FROM pairs WHERE id = ?', args: [id] });
+  return plainOne(res.rows[0] as unknown as Pair | undefined);
 }
 
-export function upsertPair(p: Partial<Pair> & { number: number }) {
-  const db = getDb();
-  const existing = db.prepare('SELECT id FROM pairs WHERE number = ?').get(p.number) as
-    | { id: number }
-    | undefined;
+export async function upsertPair(p: Partial<Pair> & { number: number }): Promise<number> {
+  const db = await ensureDb();
+  const existingRes = await db.execute({
+    sql: 'SELECT id FROM pairs WHERE number = ?',
+    args: [p.number],
+  });
+  const existing = existingRes.rows[0];
   if (existing) {
-    db.prepare(
-      `UPDATE pairs SET chair_name=?, vice_name=?, vision=?, photo_url=?, active=? WHERE id=?`
-    ).run(
-      p.chair_name ?? '',
-      p.vice_name ?? '',
-      p.vision ?? '',
-      p.photo_url ?? '',
-      p.active ?? 1,
-      existing.id
-    );
-    return existing.id;
+    await db.execute({
+      sql: `UPDATE pairs SET chair_name=?, vice_name=?, vision=?, photo_url=?, active=? WHERE id=?`,
+      args: [
+        p.chair_name ?? '',
+        p.vice_name ?? '',
+        p.vision ?? '',
+        p.photo_url ?? '',
+        p.active ?? 1,
+        existing.id,
+      ],
+    });
+    return Number(existing.id);
   }
-  const res = db
-    .prepare(
-      `INSERT INTO pairs (number, chair_name, vice_name, vision, photo_url, active)
-       VALUES (?, ?, ?, ?, ?, ?)`
-    )
-    .run(
+  const res = await db.execute({
+    sql: `INSERT INTO pairs (number, chair_name, vice_name, vision, photo_url, active) VALUES (?, ?, ?, ?, ?, ?)`,
+    args: [
       p.number,
       p.chair_name ?? '',
       p.vice_name ?? '',
       p.vision ?? '',
       p.photo_url ?? '',
-      p.active ?? 1
-    );
+      p.active ?? 1,
+    ],
+  });
   return Number(res.lastInsertRowid);
 }
 
-export function deletePair(id: number) {
-  getDb().prepare('DELETE FROM pairs WHERE id = ?').run(id);
+export async function deletePair(id: number): Promise<void> {
+  const db = await ensureDb();
+  await db.execute({ sql: 'DELETE FROM pairs WHERE id = ?', args: [id] });
 }
 
 // ---------- NEWS ----------
-export function listNews(publishedOnly = false): NewsItem[] {
-  const db = getDb();
+export async function listNews(publishedOnly = false): Promise<NewsItem[]> {
+  const db = await ensureDb();
   const sql = publishedOnly
     ? 'SELECT * FROM news WHERE published = 1 ORDER BY created_at DESC'
     : 'SELECT * FROM news ORDER BY created_at DESC';
-  return plain(db.prepare(sql).all() as NewsItem[]);
+  const res = await db.execute(sql);
+  return plain(res.rows as unknown as NewsItem[]);
 }
 
-export function getNews(id: number): NewsItem | undefined {
-  const db = getDb();
-  return plainOne(db.prepare('SELECT * FROM news WHERE id = ?').get(id) as NewsItem | undefined);
+export async function getNews(id: number): Promise<NewsItem | undefined> {
+  const db = await ensureDb();
+  const res = await db.execute({ sql: 'SELECT * FROM news WHERE id = ?', args: [id] });
+  return plainOne(res.rows[0] as unknown as NewsItem | undefined);
 }
 
-export function upsertNews(n: Partial<NewsItem> & { title: string; body: string }) {
-  const db = getDb();
+export async function upsertNews(n: Partial<NewsItem> & { title: string; body: string }): Promise<number> {
+  const db = await ensureDb();
   const cover = n.cover_url ?? null;
   const featured = n.featured ?? 0;
   const isNew = n.is_new ?? 0;
   if (n.id) {
-    db.prepare('UPDATE news SET title=?, body=?, cover_url=?, featured=?, is_new=?, published=?, updated_at=datetime(\'now\') WHERE id=?').run(
-      n.title,
-      n.body,
-      cover,
-      featured,
-      isNew,
-      n.published ?? 1,
-      n.id
-    );
+    await db.execute({
+      sql: `UPDATE news SET title=?, body=?, cover_url=?, featured=?, is_new=?, published=?, updated_at=datetime('now') WHERE id=?`,
+      args: [n.title, n.body, cover, featured, isNew, n.published ?? 1, n.id],
+    });
     return n.id;
   }
-  const res = db
-    .prepare('INSERT INTO news (title, body, cover_url, featured, is_new, published) VALUES (?, ?, ?, ?, ?, ?)')
-    .run(n.title, n.body, cover, featured, isNew, n.published ?? 1);
+  const res = await db.execute({
+    sql: `INSERT INTO news (title, body, cover_url, featured, is_new, published) VALUES (?, ?, ?, ?, ?, ?)`,
+    args: [n.title, n.body, cover, featured, isNew, n.published ?? 1],
+  });
   return Number(res.lastInsertRowid);
 }
 
-export function deleteNews(id: number) {
-  getDb().prepare('DELETE FROM news WHERE id = ?').run(id);
+export async function deleteNews(id: number): Promise<void> {
+  const db = await ensureDb();
+  await db.execute({ sql: 'DELETE FROM news WHERE id = ?', args: [id] });
 }
 
 // ---------- VOTES (logika inti) ----------
-// Menjatuhkan satu suara. Nomor urut GLOBAL diambil dari MAX(voter_no)+1,
-// sehingga Pemilih 1,2,3,... terus naik LINTAS akun.
-export function castVote(accountId: number, pairId: number, voterId?: number): { voter_no: number } {
-  const db = getDb();
-  // node:sqlite tidak punya wrapper .transaction(); pakai BEGIN/COMMIT manual
-  // agar pengambilan nomor urut & insert atomik (tidak ada nomor kembar).
-  db.exec('BEGIN');
+export async function castVote(accountId: number, pairId: number, voterId?: number): Promise<{ voter_no: number }> {
+  const db = await ensureDb();
+  const tx = await db.transaction('write');
   try {
-    const maxRow = db.prepare('SELECT COALESCE(MAX(voter_no),0) AS m FROM votes').get() as {
-      m: number;
-    };
-    const nextNo = maxRow.m + 1;
-    db.prepare('INSERT INTO votes (voter_no, account_id, pair_id) VALUES (?, ?, ?)').run(
-      nextNo,
-      accountId,
-      pairId
-    );
+    const maxRow = (await tx.execute('SELECT COALESCE(MAX(voter_no),0) AS m FROM votes')).rows[0] as unknown as { m: number };
+    const nextNo = Number(maxRow.m) + 1;
+    await tx.execute({
+      sql: 'INSERT INTO votes (voter_no, account_id, pair_id) VALUES (?, ?, ?)',
+      args: [nextNo, accountId, pairId],
+    });
     // Hancurkan token akun agar tidak bisa digunakan kembali (single-use token)
-    db.prepare('UPDATE accounts SET token_hash = NULL, token_hint = NULL WHERE id = ?').run(accountId);
-    db.prepare('DELETE FROM voter_sessions WHERE account_id = ?').run(accountId);
+    await tx.execute({
+      sql: 'UPDATE accounts SET token_hash = NULL, token_hint = NULL WHERE id = ?',
+      args: [accountId],
+    });
+    await tx.execute({
+      sql: 'DELETE FROM voter_sessions WHERE account_id = ?',
+      args: [accountId],
+    });
 
     // Jika pemilih menggunakan token DPT / massal, tandai sudah memilih
     if (voterId) {
-      db.prepare('UPDATE voters SET is_used = 1, used_at = datetime(\'now\'), used_booth = ? WHERE id = ?').run(
-        accountId,
-        voterId
-      );
+      await tx.execute({
+        sql: `UPDATE voters SET is_used = 1, used_at = datetime('now'), used_booth = ? WHERE id = ?`,
+        args: [accountId, voterId],
+      });
     }
 
-    audit('VOTE', `Pemilih ke-${nextNo} dari Bilik ${accountId} memilih pasangan ${pairId}`, accountId);
-    db.exec('COMMIT');
+    await tx.execute({
+      sql: 'INSERT INTO audit (action, detail, account_id) VALUES (?, ?, ?)',
+      args: ['VOTE', `Pemilih ke-${nextNo} dari Bilik ${accountId} memilih pasangan ${pairId}`, accountId],
+    });
+
+    await tx.commit();
     return { voter_no: nextNo };
   } catch (e) {
-    db.exec('ROLLBACK');
+    await tx.rollback();
     throw e;
   }
 }
 
-export function totalVotes(): number {
-  return (getDb().prepare('SELECT COUNT(*) AS c FROM votes').get() as { c: number }).c;
+export async function totalVotes(): Promise<number> {
+  const db = await ensureDb();
+  const res = await db.execute('SELECT COUNT(*) AS c FROM votes');
+  return Number(res.rows[0].c);
 }
 
 // Rekap suara per pasangan (untuk scoreboard).
-export function tally(): { pair_id: number; number: number; chair_name: string; vice_name: string; photo_url: string; votes: number }[] {
-  const db = getDb();
+export async function tally(): Promise<{ pair_id: number; number: number; chair_name: string; vice_name: string; photo_url: string; votes: number }[]> {
+  const db = await ensureDb();
+  const res = await db.execute(`
+    SELECT p.id AS pair_id, p.number, p.chair_name, p.vice_name, p.photo_url,
+          COALESCE((SELECT COUNT(*) FROM votes v WHERE v.pair_id = p.id),0) AS votes
+    FROM pairs p
+    ORDER BY p.number
+  `);
   return plain(
-    db
-      .prepare(
-        `SELECT p.id AS pair_id, p.number, p.chair_name, p.vice_name, p.photo_url,
-              COALESCE((SELECT COUNT(*) FROM votes v WHERE v.pair_id = p.id),0) AS votes
-       FROM pairs p
-       ORDER BY p.number`
-      )
-      .all() as { pair_id: number; number: number; chair_name: string; vice_name: string; photo_url: string; votes: number }[]
+    res.rows.map((r) => ({
+      pair_id: Number(r.pair_id),
+      number: Number(r.number),
+      chair_name: String(r.chair_name),
+      vice_name: String(r.vice_name),
+      photo_url: String(r.photo_url || ''),
+      votes: Number(r.votes),
+    }))
   );
 }
 
 // Rekap perolehan suara terungkap secara aman (hanya agregasi per paslon, tanpa data pemilih individual)
-export function revealedTally(revealedCount: number): { pair_id: number; number: number; chair_name: string; vice_name: string; photo_url: string; votes: number }[] {
-  const db = getDb();
+export async function revealedTally(revealedCount: number): Promise<{ pair_id: number; number: number; chair_name: string; vice_name: string; photo_url: string; votes: number }[]> {
+  const db = await ensureDb();
+  const res = await db.execute({
+    sql: `
+      SELECT p.id AS pair_id, p.number, p.chair_name, p.vice_name, p.photo_url,
+            COALESCE((
+              SELECT COUNT(*) FROM (
+                SELECT pair_id FROM votes ORDER BY voter_no ASC LIMIT ?
+              ) v WHERE v.pair_id = p.id
+            ),0) AS votes
+      FROM pairs p
+      ORDER BY p.number
+    `,
+    args: [Math.max(0, revealedCount)],
+  });
   return plain(
-    db
-      .prepare(
-        `SELECT p.id AS pair_id, p.number, p.chair_name, p.vice_name, p.photo_url,
-              COALESCE((
-                SELECT COUNT(*) FROM (
-                  SELECT pair_id FROM votes ORDER BY voter_no ASC LIMIT ?
-                ) v WHERE v.pair_id = p.id
-              ),0) AS votes
-       FROM pairs p
-       ORDER BY p.number`
-      )
-      .all(Math.max(0, revealedCount)) as { pair_id: number; number: number; chair_name: string; vice_name: string; photo_url: string; votes: number }[]
+    res.rows.map((r) => ({
+      pair_id: Number(r.pair_id),
+      number: Number(r.number),
+      chair_name: String(r.chair_name),
+      vice_name: String(r.vice_name),
+      photo_url: String(r.photo_url || ''),
+      votes: Number(r.votes),
+    }))
   );
 }
 
 // Seluruh suara berurutan (untuk audit internal / verifikasi admin).
-export function voteTimeline(): VoteRow[] {
-  const db = getDb();
-  return plain(
-    db.prepare('SELECT * FROM votes ORDER BY voter_no ASC').all() as VoteRow[]
-  );
+export async function voteTimeline(): Promise<VoteRow[]> {
+  const db = await ensureDb();
+  const res = await db.execute('SELECT * FROM votes ORDER BY voter_no ASC');
+  return plain(res.rows as unknown as VoteRow[]);
 }
 
 // Audit per akun: berapa suara dari akun 1/2/3.
-export function votesByAccount(): { account_id: number; count: number }[] {
-  const db = getDb();
+export async function votesByAccount(): Promise<{ account_id: number; count: number }[]> {
+  const db = await ensureDb();
+  const res = await db.execute('SELECT account_id, COUNT(*) AS count FROM votes GROUP BY account_id ORDER BY account_id');
   return plain(
-    db
-      .prepare('SELECT account_id, COUNT(*) AS count FROM votes GROUP BY account_id ORDER BY account_id')
-      .all() as { account_id: number; count: number }[]
+    res.rows.map((r) => ({
+      account_id: Number(r.account_id),
+      count: Number(r.count),
+    }))
   );
 }
 
-export function audit(action: string, detail: string, accountId?: number) {
-  getDb()
-    .prepare('INSERT INTO audit (action, detail, account_id) VALUES (?, ?, ?)')
-    .run(action, detail, accountId ?? null);
+export async function audit(action: string, detail: string, accountId?: number): Promise<void> {
+  const db = await ensureDb();
+  await db.execute({
+    sql: 'INSERT INTO audit (action, detail, account_id) VALUES (?, ?, ?)',
+    args: [action, detail, accountId ?? null],
+  });
 }
 
-export function listAudit(): { id: number; action: string; detail: string; account_id: number | null; created_at: string }[] {
-  const db = getDb();
-  return plain(
-    db
-      .prepare('SELECT * FROM audit ORDER BY id DESC LIMIT 200')
-      .all() as { id: number; action: string; detail: string; account_id: number | null; created_at: string }[]
-  );
+export async function listAudit(): Promise<{ id: number; action: string; detail: string; account_id: number | null; created_at: string }[]> {
+  const db = await ensureDb();
+  const res = await db.execute('SELECT * FROM audit ORDER BY id DESC LIMIT 200');
+  return res.rows.map((r) => ({
+    id: Number(r.id),
+    action: String(r.action),
+    detail: String(r.detail || ''),
+    account_id: r.account_id !== null && r.account_id !== undefined ? Number(r.account_id) : null,
+    created_at: String(r.created_at),
+  }));
 }
 
 // Reset: hapus semua suara & sesi voter (AKUN & TOKEN tetap ada).
-export function resetVotes() {
-  const db = getDb();
-  db.prepare('DELETE FROM votes').run();
-  db.prepare('DELETE FROM voter_sessions').run();
-  db.prepare('UPDATE scoreboard_state SET revealed = 0').run();
-  audit('RESET', 'Seluruh suara direset');
+export async function resetVotes(): Promise<void> {
+  const db = await ensureDb();
+  await db.execute('DELETE FROM votes');
+  await db.execute('DELETE FROM voter_sessions');
+  await db.execute('UPDATE scoreboard_state SET revealed = 0');
+  await audit('RESET', 'Seluruh suara direset');
 }
 
 // ---------- SCOREBOARD STATE (dikendalikan admin) ----------
 export type ScoreboardState = { published: boolean; revealed: number; total: number };
 
-export function getScoreboardState(): ScoreboardState {
-  const db = getDb();
-  const row = db.prepare('SELECT published, revealed FROM scoreboard_state WHERE id = 1').get() as {
-    published: number;
-    revealed: number;
-  };
-  const total = (db.prepare('SELECT COUNT(*) AS c FROM votes').get() as { c: number }).c;
-  return { published: !!row.published, revealed: Math.min(row.revealed, total), total };
+export async function getScoreboardState(): Promise<ScoreboardState> {
+  const db = await ensureDb();
+  const rowRes = await db.execute('SELECT published, revealed FROM scoreboard_state WHERE id = 1');
+  const row = rowRes.rows[0];
+  const totalRes = await db.execute('SELECT COUNT(*) AS c FROM votes');
+  const total = Number(totalRes.rows[0].c);
+  const revealed = Number(row?.revealed ?? 0);
+  return { published: !!row?.published, revealed: Math.min(revealed, total), total };
 }
 
-export function setScoreboardPublished(published: boolean) {
-  getDb().prepare('UPDATE scoreboard_state SET published = ?').run(published ? 1 : 0);
+export async function setScoreboardPublished(published: boolean): Promise<void> {
+  const db = await ensureDb();
+  await db.execute({
+    sql: 'UPDATE scoreboard_state SET published = ? WHERE id = 1',
+    args: [published ? 1 : 0],
+  });
 }
 
-export function setScoreboardRevealed(revealed: number) {
-  const db = getDb();
-  const total = (db.prepare('SELECT COUNT(*) AS c FROM votes').get() as { c: number }).c;
+export async function setScoreboardRevealed(revealed: number): Promise<void> {
+  const db = await ensureDb();
+  const totalRes = await db.execute('SELECT COUNT(*) AS c FROM votes');
+  const total = Number(totalRes.rows[0].c);
   const r = Math.max(0, Math.min(revealed, total));
-  db.prepare('UPDATE scoreboard_state SET revealed = ?').run(r);
+  await db.execute({
+    sql: 'UPDATE scoreboard_state SET revealed = ? WHERE id = 1',
+    args: [r],
+  });
 }
 
 // ---------- VOTING STATE (dikendalikan admin) ----------
-export function getVotingOpen(): boolean {
-  const db = getDb();
-  const row = db.prepare('SELECT voting_open FROM scoreboard_state WHERE id = 1').get() as
-    | { voting_open: number }
-    | undefined;
+export async function getVotingOpen(): Promise<boolean> {
+  const db = await ensureDb();
+  const res = await db.execute('SELECT voting_open FROM scoreboard_state WHERE id = 1');
+  const row = res.rows[0];
   return row ? !!row.voting_open : true;
 }
 
-export function setVotingOpen(open: boolean) {
-  getDb().prepare('UPDATE scoreboard_state SET voting_open = ?').run(open ? 1 : 0);
-  audit(open ? 'VOTING_OPEN' : 'VOTING_CLOSE', open ? 'Voting dibuka' : 'Voting ditutup');
+export async function setVotingOpen(open: boolean): Promise<void> {
+  const db = await ensureDb();
+  await db.execute({
+    sql: 'UPDATE scoreboard_state SET voting_open = ? WHERE id = 1',
+    args: [open ? 1 : 0],
+  });
+  await audit(open ? 'VOTING_OPEN' : 'VOTING_CLOSE', open ? 'Voting dibuka' : 'Voting ditutup');
 }
 
 // ---------- SETTINGS (logo / maskot / org) ----------
@@ -374,102 +408,114 @@ export type Settings = {
   mascot_url: string;
 };
 
-export function getSettings(): Settings {
-  const db = getDb();
+export async function getSettings(): Promise<Settings> {
+  const db = await ensureDb();
+  const res = await db.execute('SELECT org_name, org_subtitle, logo_url, mascot_url FROM settings WHERE id = 1');
   return (
-    plainOne(
-      db
-        .prepare('SELECT org_name, org_subtitle, logo_url, mascot_url FROM settings WHERE id = 1')
-        .get() as Settings
-    ) ?? { org_name: 'OSIS', org_subtitle: 'Pemilihan Ketua & Wakil Ketua', logo_url: '', mascot_url: '' }
+    plainOne(res.rows[0] as unknown as Settings | undefined) ?? {
+      org_name: 'OSIS',
+      org_subtitle: 'Pemilihan Ketua & Wakil Ketua',
+      logo_url: '',
+      mascot_url: '',
+    }
   );
 }
 
-export function saveSettings(s: Partial<Settings>) {
-  const db = getDb();
-  const cur = getSettings();
-  db.prepare(
-    'UPDATE settings SET org_name = ?, org_subtitle = ?, logo_url = ?, mascot_url = ? WHERE id = 1'
-  ).run(
-    s.org_name ?? cur.org_name,
-    s.org_subtitle ?? cur.org_subtitle,
-    s.logo_url ?? cur.logo_url,
-    s.mascot_url ?? cur.mascot_url
-  );
+export async function saveSettings(s: Partial<Settings>): Promise<void> {
+  const db = await ensureDb();
+  const cur = await getSettings();
+  await db.execute({
+    sql: 'UPDATE settings SET org_name = ?, org_subtitle = ?, logo_url = ?, mascot_url = ? WHERE id = 1',
+    args: [
+      s.org_name ?? cur.org_name,
+      s.org_subtitle ?? cur.org_subtitle,
+      s.logo_url ?? cur.logo_url,
+      s.mascot_url ?? cur.mascot_url,
+    ],
+  });
 }
 
 // ---------- RULES (panduan pemilos) ----------
 export type Rules = { headline: string; body: string };
 
-export function getRules(): Rules {
-  const db = getDb();
+export async function getRules(): Promise<Rules> {
+  const db = await ensureDb();
+  const res = await db.execute('SELECT headline, body FROM rules WHERE id = 1');
   return (
-    plainOne(db.prepare('SELECT headline, body FROM rules WHERE id = 1').get() as Rules) ?? {
+    plainOne(res.rows[0] as unknown as Rules | undefined) ?? {
       headline: 'Peraturan & Tata Cara Pemilihan',
       body: '',
     }
   );
 }
 
-export function saveRules(headline: string, body: string) {
-  getDb().prepare('UPDATE rules SET headline = ?, body = ? WHERE id = 1').run(headline, body);
+export async function saveRules(headline: string, body: string): Promise<void> {
+  const db = await ensureDb();
+  await db.execute({
+    sql: 'UPDATE rules SET headline = ?, body = ? WHERE id = 1',
+    args: [headline, body],
+  });
 }
 
 // ---------- DAFTAR PEMILIH TETAP / TOKEN MASSAL (1-300 dst) ----------
-
-export function generateVotersBatch(fromNo: number, toNo: number): { count: number; start: number; end: number } {
-  const db = getDb();
+export async function generateVotersBatch(fromNo: number, toNo: number): Promise<{ count: number; start: number; end: number }> {
+  const db = await ensureDb();
   const start = Math.max(1, Math.floor(fromNo));
   const end = Math.max(start, Math.floor(toNo));
-  db.exec('BEGIN');
+  const tx = await db.transaction('write');
   try {
-    const insert = db.prepare(`
-      INSERT INTO voters (voter_no, name, token, is_used, used_at, used_booth)
-      VALUES (?, ?, ?, 0, NULL, NULL)
-      ON CONFLICT(voter_no) DO UPDATE SET
-        token = excluded.token,
-        is_used = 0,
-        used_at = NULL,
-        used_booth = NULL
-    `);
     let count = 0;
     for (let n = start; n <= end; n++) {
       const token = generateToken(8);
       const padNo = String(n).padStart(3, '0');
       const name = `Pemilih ${padNo}`;
-      insert.run(n, name, token);
+      await tx.execute({
+        sql: `
+          INSERT INTO voters (voter_no, name, token, is_used, used_at, used_booth)
+          VALUES (?, ?, ?, 0, NULL, NULL)
+          ON CONFLICT(voter_no) DO UPDATE SET
+            token = excluded.token,
+            is_used = 0,
+            used_at = NULL,
+            used_booth = NULL
+        `,
+        args: [n, name, token],
+      });
       count++;
     }
-    audit('VOTERS_GENERATED', `Generate ${count} token pemilih (No. Urut ${start} - ${end})`);
-    db.exec('COMMIT');
+    await tx.execute({
+      sql: 'INSERT INTO audit (action, detail) VALUES (?, ?)',
+      args: ['VOTERS_GENERATED', `Generate ${count} token pemilih (No. Urut ${start} - ${end})`],
+    });
+    await tx.commit();
     return { count, start, end };
   } catch (e) {
-    db.exec('ROLLBACK');
+    await tx.rollback();
     throw e;
   }
 }
 
-export function listVoters(options?: {
+export async function listVoters(options?: {
   filter?: 'all' | 'used' | 'unused';
   search?: string;
   limit?: number;
   offset?: number;
-}): { voters: VoterRecord[]; total: number; used: number; unused: number } {
-  const db = getDb();
+}): Promise<{ voters: VoterRecord[]; total: number; used: number; unused: number }> {
+  const db = await ensureDb();
   const filter = options?.filter || 'all';
   const search = options?.search ? options.search.trim() : '';
   const limit = options?.limit ?? 1000;
   const offset = options?.offset ?? 0;
 
-  const statRow = db.prepare(`
+  const statRes = await db.execute(`
     SELECT
       COUNT(*) AS total,
       COALESCE(SUM(CASE WHEN is_used = 1 THEN 1 ELSE 0 END), 0) AS used
     FROM voters
-  `).get() as { total: number; used: number };
-
-  const total = statRow.total;
-  const used = statRow.used;
+  `);
+  const statRow = statRes.rows[0];
+  const total = Number(statRow?.total ?? 0);
+  const used = Number(statRow?.used ?? 0);
   const unused = total - used;
 
   let query = 'SELECT * FROM voters WHERE 1=1';
@@ -490,38 +536,48 @@ export function listVoters(options?: {
   query += ' ORDER BY voter_no ASC LIMIT ? OFFSET ?';
   params.push(limit, offset);
 
-  const voters = plain(db.prepare(query).all(...params) as VoterRecord[]);
+  const res = await db.execute({ sql: query, args: params });
+  const voters = plain(res.rows as unknown as VoterRecord[]);
   return { voters, total, used, unused };
 }
 
-export function getVoterByToken(token: string): VoterRecord | undefined {
-  const db = getDb();
+export async function getVoterByToken(token: string): Promise<VoterRecord | undefined> {
+  const db = await ensureDb();
   const clean = token.trim().toUpperCase();
-  return plainOne(db.prepare('SELECT * FROM voters WHERE UPPER(token) = ?').get(clean) as VoterRecord | undefined);
+  const res = await db.execute({
+    sql: 'SELECT * FROM voters WHERE UPPER(token) = ?',
+    args: [clean],
+  });
+  return plainOne(res.rows[0] as unknown as VoterRecord | undefined);
 }
 
-export function getVoterById(id: number): VoterRecord | undefined {
-  const db = getDb();
-  return plainOne(db.prepare('SELECT * FROM voters WHERE id = ?').get(id) as VoterRecord | undefined);
+export async function getVoterById(id: number): Promise<VoterRecord | undefined> {
+  const db = await ensureDb();
+  const res = await db.execute({
+    sql: 'SELECT * FROM voters WHERE id = ?',
+    args: [id],
+  });
+  return plainOne(res.rows[0] as unknown as VoterRecord | undefined);
 }
 
-export function getVotersStats(): { total: number; used: number; unused: number; turnout: number } {
-  const db = getDb();
-  const stat = db.prepare(`
+export async function getVotersStats(): Promise<{ total: number; used: number; unused: number; turnout: number }> {
+  const db = await ensureDb();
+  const res = await db.execute(`
     SELECT
       COUNT(*) AS total,
       COALESCE(SUM(CASE WHEN is_used = 1 THEN 1 ELSE 0 END), 0) AS used
     FROM voters
-  `).get() as { total: number; used: number };
-  const total = stat.total;
-  const used = stat.used;
+  `);
+  const stat = res.rows[0];
+  const total = Number(stat?.total ?? 0);
+  const used = Number(stat?.used ?? 0);
   const unused = total - used;
   const turnout = total > 0 ? Math.round((used / total) * 100) : 0;
   return { total, used, unused, turnout };
 }
 
-export function resetAllVoters(): void {
-  const db = getDb();
-  db.prepare('DELETE FROM voters').run();
-  audit('VOTERS_RESET', 'Seluruh data token pemilih massal dihapus');
+export async function resetAllVoters(): Promise<void> {
+  const db = await ensureDb();
+  await db.execute('DELETE FROM voters');
+  await audit('VOTERS_RESET', 'Seluruh data token pemilih massal dihapus');
 }

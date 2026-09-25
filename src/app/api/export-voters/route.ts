@@ -13,8 +13,8 @@ export async function GET(req: Request) {
 
   const url = new URL(req.url);
   const filter = (url.searchParams.get('filter') || 'all') as 'all' | 'used' | 'unused';
-  const { voters, total, used, unused } = listVoters({ filter, limit: 10000 });
-  const settings = getSettings();
+  const { voters, total, used, unused } = await listVoters({ filter, limit: 10000 });
+  const settings = await getSettings();
 
   // Header informasi rekap
   const lines: string[] = [

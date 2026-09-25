@@ -4,8 +4,8 @@ import AppShell from '@/components/AppShell';
 
 export const dynamic = 'force-dynamic';
 
-export default function PanduanPage() {
-  const rules = getRules();
+export default async function PanduanPage() {
+  const rules = await getRules();
   const lines = rules.body
     .split('\n')
     .map((l) => l.trim())

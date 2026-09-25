@@ -12,8 +12,8 @@ export async function GET(req: Request) {
   }
   const url = new URL(req.url);
   const format = (url.searchParams.get('format') || 'csv').toLowerCase();
-  const state = getScoreboardState();
-  const rows = tally();
+  const state = await getScoreboardState();
+  const rows = await tally();
   const total = rows.reduce((s, r) => s + r.votes, 0) || 1;
 
   // Susun data agregat (sama seperti web: share dari total suara)

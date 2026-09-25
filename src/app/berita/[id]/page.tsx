@@ -14,7 +14,7 @@ function formatDate(iso: string): string {
 export default async function BeritaDetailPage({ params }: { params: { id: string } }) {
   const id = Number(params.id);
   if (!Number.isInteger(id)) notFound();
-  const news = getNews(id);
+  const news = await getNews(id);
   if (!news || !news.published) notFound();
 
   return (

@@ -6,9 +6,9 @@ import AppShell from '@/components/AppShell';
 export const dynamic = 'force-dynamic';
 
 export default async function HomePage() {
-  const pairs = listPairs(true);
+  const pairs = await listPairs(true);
   const admin = await isAdmin();
-  const settings = getSettings();
+  const settings = await getSettings();
   return (
     <AppShell>
       <HomeClient pairs={pairs} isAdmin={admin} settings={settings} />

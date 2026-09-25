@@ -7,6 +7,6 @@ export const dynamic = 'force-dynamic';
 
 export default async function AdminLoginPage() {
   if (await isAdmin()) redirect('/admin');
-  const settings = getSettings();
+  const settings = await getSettings();
   return <AdminLoginClient logoUrl={settings.logo_url} />;
 }
