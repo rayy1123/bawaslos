@@ -181,8 +181,8 @@ async function migrate(db: Client) {
 export function getDb(): Client {
   if (globalForDb.__bawaslosDb) return globalForDb.__bawaslosDb;
 
-  let url = process.env.TURSO_DATABASE_URL;
-  const authToken = process.env.TURSO_AUTH_TOKEN;
+  let url = process.env.TURSO_DATABASE_URL || process.env.turso_database_url;
+  const authToken = process.env.TURSO_AUTH_TOKEN || process.env.turso_auth_token;
 
   if (!url) {
     // Di Vercel serverless, hanya folder /tmp yang memiliki akses tulis (writable).
@@ -220,8 +220,15 @@ export async function ensureDb(): Promise<Client> {
       await db.executeMultiple(SCHEMA_SQL);
       await seed(db);
       await migrate(db);
-    })();
+    })().catch((err) => {
+      globalForDb.__bawaslosDbInit = undefined;
+      console.error('Error saat inisialisasi database:', err);
+      throw err;
+    });
   }
+  await globalForDb.__bawaslosDbInit;
+  return db;
+}
   await globalForDb.__bawaslosDbInit;
   return db;
 }

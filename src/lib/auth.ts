@@ -38,7 +38,11 @@ export function generateToken(length = 8): string {
 
 // Sesi admin disimpan di cookie terenkripsi (signed). Kunci dari env atau default dev.
 function sessionSecret(): string {
-  return process.env.BAWASLOS_SECRET || 'bawaslos-dev-secret-jangan-pakai-di-produksi';
+  return (
+    process.env.BAWASLOS_SECRET ||
+    process.env.bawaslos_secret ||
+    'bawaslos-dev-secret-jangan-pakai-di-produksi'
+  );
 }
 
 // Buat token sesi admin (signed). Format: <random>.<signature>
