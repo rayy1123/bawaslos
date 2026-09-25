@@ -411,14 +411,13 @@ export type Settings = {
 export async function getSettings(): Promise<Settings> {
   const db = await ensureDb();
   const res = await db.execute('SELECT org_name, org_subtitle, logo_url, mascot_url FROM settings WHERE id = 1');
-  return (
-    plainOne(res.rows[0] as unknown as Settings | undefined) ?? {
-      org_name: 'OSIS',
-      org_subtitle: 'Pemilihan Ketua & Wakil Ketua',
-      logo_url: '',
-      mascot_url: '',
-    }
-  );
+  const row = plainOne(res.rows[0] as unknown as Settings | undefined);
+  return {
+    org_name: row?.org_name || 'BAWASLOS',
+    org_subtitle: row?.org_subtitle || 'Badan Pengawas Pemilihan Osis — SMK Negeri 64 Jakarta',
+    logo_url: row?.logo_url || '/logo.png',
+    mascot_url: row?.mascot_url || '/maskot.png',
+  };
 }
 
 export async function saveSettings(s: Partial<Settings>): Promise<void> {

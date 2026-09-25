@@ -145,7 +145,46 @@ async function seed(db: Client) {
   if (Number(setRes.rows[0].c) === 0) {
     await db.execute({
       sql: 'INSERT INTO settings (id, org_name, org_subtitle, logo_url, mascot_url) VALUES (1, ?, ?, ?, ?)',
-      args: ['OSIS', 'Pemilihan Ketua & Wakil Ketua', '', ''],
+      args: ['BAWASLOS', 'Badan Pengawas Pemilihan Osis — SMK Negeri 64 Jakarta', '/logo.png', '/maskot.png'],
+    });
+  } else {
+    // Jika data settings sudah terbuat tapi logo masih kosong / default lama, update ke /logo.png
+    await db.execute("UPDATE settings SET logo_url = '/logo.png' WHERE id = 1 AND (logo_url IS NULL OR logo_url = '')");
+    await db.execute("UPDATE settings SET mascot_url = '/maskot.png' WHERE id = 1 AND (mascot_url IS NULL OR mascot_url = '')");
+    await db.execute("UPDATE settings SET org_name = 'BAWASLOS' WHERE id = 1 AND (org_name = 'OSIS' OR org_name IS NULL)");
+    await db.execute("UPDATE settings SET org_subtitle = 'Badan Pengawas Pemilihan Osis — SMK Negeri 64 Jakarta' WHERE id = 1 AND (org_subtitle = 'Pemilihan Ketua & Wakil Ketua' OR org_subtitle IS NULL)");
+  }
+
+  // Seed data default 3 pasangan calon jika tabel masih kosong
+  const pairsRes = await db.execute('SELECT COUNT(*) AS c FROM pairs');
+  if (Number(pairsRes.rows[0].c) === 0) {
+    await db.execute({
+      sql: 'INSERT INTO pairs (number, chair_name, vice_name, vision, photo_url, active) VALUES (?, ?, ?, ?, ?, ?)',
+      args: [1, 'Andi', 'Budi', 'Mewujudkan OSIS yang inovatif, inklusif, dan berprestasi berlandaskan kejujuran serta disiplin.', '/paslon-1.jpg', 1],
+    });
+    await db.execute({
+      sql: 'INSERT INTO pairs (number, chair_name, vice_name, vision, photo_url, active) VALUES (?, ?, ?, ?, ?, ?)',
+      args: [2, 'Citra', 'Dewi', 'Membangun lingkungan sekolah yang aktif dan kreatif melalui program kerja nyata untuk seluruh siswa.', '/paslon-2.jpg', 1],
+    });
+    await db.execute({
+      sql: 'INSERT INTO pairs (number, chair_name, vice_name, vision, photo_url, active) VALUES (?, ?, ?, ?, ?, ?)',
+      args: [3, 'Eka', 'Fajar', 'Menjadikan OSIS wadah aspirasi yang transparan, komunikatif, dan responsif terhadap kebutuhan siswa.', '/paslon-3.jpg', 1],
+    });
+  }
+
+  // Seed berita default jika belum ada
+  const newsRes = await db.execute('SELECT COUNT(*) AS c FROM news');
+  if (Number(newsRes.rows[0].c) === 0) {
+    await db.execute({
+      sql: 'INSERT INTO news (title, body, cover_url, featured, is_new, published) VALUES (?, ?, ?, ?, ?, ?)',
+      args: [
+        'Open Recruitment Ketua & Wakil Ketua OSIS',
+        'Pendaftaran pasangan calon ketua dan wakil ketua OSIS periode ini telah dibuka. Segera lengkapi berkas persyaratan dan serahkan ke panitia pemilihan. Pemilihan akan dilaksanakan secara elektronik melalui 3 akun pemilih yang disediakan.',
+        '/news-1.jpg',
+        1,
+        0,
+        1,
+      ],
     });
   }
 
