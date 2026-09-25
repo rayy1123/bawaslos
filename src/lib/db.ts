@@ -229,6 +229,3 @@ export async function ensureDb(): Promise<Client> {
   await globalForDb.__bawaslosDbInit;
   return db;
 }
-  await globalForDb.__bawaslosDbInit;
-  return db;
-}
