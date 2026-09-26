@@ -7,7 +7,13 @@ import { voterLoginAction, listAccountsAction } from '@/lib/actions';
 import { CheckIcon, LockIcon, BallotIcon, ArrowRight, SealIcon } from '@/components/icons';
 import LogoSeal from '@/components/LogoSeal';
 
-export default function VoterLoginCard() {
+type Props = {
+  logoUrl?: string | null;
+  mascotUrl?: string | null;
+  orgName?: string | null;
+};
+
+export default function VoterLoginCard({ logoUrl, mascotUrl, orgName }: Props) {
   const router = useRouter();
   const [accountId, setAccountId] = useState(1);
   const [token, setToken] = useState('');
@@ -40,7 +46,7 @@ export default function VoterLoginCard() {
         <Link href="/" className="inline-flex items-center gap-1.5 text-sm font-semibold text-[#0b1f4b] hover:text-[#b0892f]">
           <span className="text-base">⌂</span> Beranda
         </Link>
-        <LogoSeal className="h-12 w-12" />
+        <LogoSeal src={logoUrl} className="h-12 w-12" />
       </div>
 
       <div className="flex flex-1 items-center justify-center px-4 pb-12">
@@ -64,9 +70,9 @@ export default function VoterLoginCard() {
           <div className="p-8">
             <div className="flex flex-col items-center text-center">
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src="/maskot.png" alt="Pengawas" className="h-24 w-auto rounded-xl object-contain" />
+              <img src={mascotUrl || "/maskot.png"} alt="Pengawas" className="h-24 w-auto rounded-xl object-contain" />
               <h1 className="mt-2 text-2xl font-extrabold text-[#0b1f4b]">Masuk Bilik Suara</h1>
-              <p className="text-xs text-[#2c3e63]">BAWASLOS — E-Voting</p>
+              <p className="text-xs text-[#2c3e63]">{orgName || 'BAWASLOS'} — E-Voting</p>
             </div>
 
             <p className="mt-4 text-center text-sm text-[#2c3e63]">
@@ -124,7 +130,7 @@ export default function VoterLoginCard() {
               <Link href="/scoreboard" className="font-semibold text-[#0b1f4b] hover:text-[#b0892f]">Scoreboard</Link>
             </div>
 
-            <p className="mt-4 text-center text-[11px] text-[#2c3e63]/60">© 2024 BAWASLOS. Jujur dan Transparan.</p>
+            <p className="mt-4 text-center text-[11px] text-[#2c3e63]/60">© 2024 {orgName || 'BAWASLOS'}. Jujur dan Transparan.</p>
           </div>
         </div>
       </div>

@@ -9,7 +9,7 @@ export default async function AppShell({ children }: { children: React.ReactNode
   return (
     <div className="flex min-h-screen flex-col bg-[#f6f3ec]">
       {/* Header konsisten (satu sumber: SiteNav) */}
-      <SiteNav logoUrl={settings.logo_url} />
+      <SiteNav logoUrl={settings.logo_url} orgName={settings.org_name} />
 
       <div className="flex-1">{children}</div>
 
@@ -19,9 +19,9 @@ export default async function AppShell({ children }: { children: React.ReactNode
           <div className="flex flex-col items-center gap-3 sm:flex-row sm:justify-between">
             <div className="flex items-center gap-2">
               <LogoSeal src={settings.logo_url} className="h-8 w-8" />
-              <span className="font-serif text-lg font-bold text-[#0b1f4b]">BAWASLOS</span>
+              <span className="font-serif text-lg font-bold text-[#0b1f4b]">{settings.org_name || 'BAWASLOS'}</span>
             </div>
-            <span className="text-center">© 2024 Badan Pengawas Pemilihan OSIS. Jujur & Transparan.</span>
+            <span className="text-center">© 2024 {settings.org_name || 'Badan Pengawas Pemilihan OSIS'}. Jujur &amp; Transparan.</span>
             <div className="flex flex-wrap justify-center gap-4">
               <Link href="/panduan" className="font-medium hover:text-[#b0892f]">Panduan</Link>
               <Link href="/panduan" className="font-medium hover:text-[#b0892f]">Syarat</Link>

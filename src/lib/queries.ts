@@ -440,10 +440,10 @@ export async function saveSettings(s: Partial<Settings>): Promise<void> {
   await db.execute({
     sql: 'UPDATE settings SET org_name = ?, org_subtitle = ?, logo_url = ?, mascot_url = ? WHERE id = 1',
     args: [
-      s.org_name ?? cur.org_name,
-      s.org_subtitle ?? cur.org_subtitle,
-      s.logo_url ?? cur.logo_url,
-      s.mascot_url ?? cur.mascot_url,
+      s.org_name !== undefined && s.org_name.trim() !== '' ? s.org_name : cur.org_name,
+      s.org_subtitle !== undefined && s.org_subtitle.trim() !== '' ? s.org_subtitle : cur.org_subtitle,
+      s.logo_url !== undefined && s.logo_url.trim() !== '' ? s.logo_url : cur.logo_url,
+      s.mascot_url !== undefined && s.mascot_url.trim() !== '' ? s.mascot_url : cur.mascot_url,
     ],
   });
 }

@@ -13,13 +13,14 @@ type Props = {
   accounts: Account[];
   voterAccount: number | null;
   logoUrl?: string | null;
+  orgName?: string | null;
   votingOpen?: boolean;
   completedNo?: number | null;
 };
 
 type VoteStage = 'login' | 'voting' | 'completed' | 'already_voted';
 
-export default function VoteClient({ pairs, accounts, voterAccount, logoUrl, votingOpen = true, completedNo = null }: Props) {
+export default function VoteClient({ pairs, accounts, voterAccount, logoUrl, orgName, votingOpen = true, completedNo = null }: Props) {
   const router = useRouter();
   const [accountId, setAccountId] = useState(1);
   const [token, setToken] = useState('');
@@ -106,7 +107,7 @@ export default function VoteClient({ pairs, accounts, voterAccount, logoUrl, vot
 
   return (
     <div className="min-h-screen bg-[#f6f3ec]">
-      <SiteNav logoUrl={logoUrl} />
+      <SiteNav logoUrl={logoUrl} orgName={orgName} />
 
       {!votingOpen ? (
         <main className="mx-auto max-w-lg px-4 py-20 text-center">

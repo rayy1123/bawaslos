@@ -1,11 +1,12 @@
 import Link from 'next/link';
-import { getRules } from '@/lib/queries';
+import { getRules, getSettings } from '@/lib/queries';
 import AppShell from '@/components/AppShell';
 
 export const dynamic = 'force-dynamic';
 
 export default async function PanduanPage() {
   const rules = await getRules();
+  const settings = await getSettings();
   const lines = rules.body
     .split('\n')
     .map((l) => l.trim())
@@ -27,13 +28,13 @@ export default async function PanduanPage() {
       <section className="mt-8 flex flex-col items-center gap-4 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm sm:flex-row sm:items-center">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
-          src="/maskot.png"
-          alt="Maskot Bawaslos menjelaskan panduan pemilihan"
+          src={settings.mascot_url || '/maskot.png'}
+          alt={`Maskot ${settings.org_name || 'Bawaslos'} menjelaskan panduan pemilihan`}
           className="h-44 w-auto rounded-xl object-contain sm:h-52"
         />
         <div className="text-center sm:text-left">
           <p className="text-xs font-bold uppercase tracking-widest text-[#0b1f4b]/70">
-            Bawaslos Menjelaskan
+            {settings.org_name || 'Bawaslos'} Menjelaskan
           </p>
           <h1 className="mt-1 text-2xl font-extrabold text-[#0b1f4b]">{rules.headline}</h1>
           <p className="mt-2 text-sm text-slate-600">
