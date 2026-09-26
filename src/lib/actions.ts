@@ -265,8 +265,7 @@ export async function saveSettingsAction(formData: FormData) {
     return { ok: false, error: 'Maskot terlalu besar (maks 1.5 MB).' };
   }
   await saveSettings({ org_name, org_subtitle, logo_url, mascot_url });
-  revalidatePath('/');
-  revalidatePath('/admin');
+  revalidatePath('/', 'layout');
   return { ok: true };
 }
 

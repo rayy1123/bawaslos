@@ -28,7 +28,7 @@ export default function HomeClient({ pairs, settings }: Props) {
           />
           <div className="animate-name-fade">
             <span className="block font-serif text-5xl font-extrabold tracking-[0.12em] text-[#0b1f4b] sm:text-6xl">
-              BAWASLOS
+              {settings.org_name || 'BAWASLOS'}
             </span>
             <p className="mt-2 text-xs font-semibold uppercase tracking-[0.25em] text-[#b0892f]">
               Badan Pengawas Pemilihan OSIS

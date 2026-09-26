@@ -6,7 +6,13 @@ import { adminLoginAction } from '@/lib/actions';
 import { SealIcon, LockIcon, ArrowRight } from '@/components/icons';
 import LogoSeal from '@/components/LogoSeal';
 
-export default function AdminLoginClient({ logoUrl }: { logoUrl?: string | null }) {
+export default function AdminLoginClient({
+  logoUrl,
+  orgName,
+}: {
+  logoUrl?: string | null;
+  orgName?: string | null;
+}) {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [remember, setRemember] = useState(false);
@@ -65,8 +71,8 @@ export default function AdminLoginClient({ logoUrl }: { logoUrl?: string | null 
           <div className="p-8">
             <div className="flex flex-col items-center text-center">
               <LogoSeal src={logoUrl} className="h-36 w-36" />
-              <h1 className="mt-3 text-2xl font-extrabold tracking-wide text-[#0b1f4b]">BAWASLOS</h1>
-              <p className="text-xs text-[#2c3e63]">Admin Portal — Electoral Oversight</p>
+              <h1 className="mt-3 text-2xl font-extrabold tracking-wide text-[#0b1f4b]">{orgName || 'BAWASLOS'}</h1>
+              <p className="text-xs text-[#2c3e63]">{orgName || 'BAWASLOS'} — Admin Portal</p>
             </div>
 
             <div className="mt-6 border-b border-[#0b1f4b]/10 pb-2">

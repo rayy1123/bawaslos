@@ -12,9 +12,9 @@ const NAV = [
   { href: '/scoreboard', label: 'Scoreboard' },
 ];
 
-type Props = { logoUrl?: string | null };
+type Props = { logoUrl?: string | null; orgName?: string | null };
 
-export default function SiteNav({ logoUrl }: Props) {
+export default function SiteNav({ logoUrl, orgName }: Props) {
   const pathname = usePathname();
   const isHome = pathname === '/';
   const isActive = (href: string) =>
@@ -24,14 +24,14 @@ export default function SiteNav({ logoUrl }: Props) {
     <header className="sticky top-0 z-50 w-full border-b border-[#0b1f4b]/10 bg-[#f6f3ec]/95 backdrop-blur-md">
       <div className="mx-auto max-w-6xl px-4 py-3">
         <div className="flex h-12 items-center justify-between">
-          <Link 
-            href="/" 
+          <Link
+            href="/"
             className="flex items-center gap-3"
             aria-label="Beranda Bawaslos"
           >
             <LogoSeal src={logoUrl} className={`h-9 w-9 ${isHome ? 'seal-rise' : ''}`} />
             <span className={`text-lg font-bold text-[#0b1f4b] ${isHome ? 'brand-slide' : ''}`}>
-              BAWASLOS
+              {orgName || 'BAWASLOS'}
             </span>
           </Link>
 

@@ -22,6 +22,7 @@ export default async function VotePage({
       accounts={accounts}
       voterAccount={voterAccount}
       logoUrl={settings.logo_url}
+      orgName={settings.org_name}
       votingOpen={votingOpen}
       completedNo={completedNo}
     />
