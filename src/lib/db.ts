@@ -46,6 +46,8 @@ const SCHEMA_SQL = `
     title       TEXT NOT NULL,
     body        TEXT NOT NULL,
     cover_url   TEXT,
+    featured    INTEGER NOT NULL DEFAULT 0,
+    is_new      INTEGER NOT NULL DEFAULT 0,
     published   INTEGER NOT NULL DEFAULT 1,
     created_at  TEXT NOT NULL DEFAULT (datetime('now')),
     updated_at  TEXT NOT NULL DEFAULT (datetime('now'))
@@ -83,7 +85,8 @@ const SCHEMA_SQL = `
   CREATE TABLE IF NOT EXISTS scoreboard_state (
     id          INTEGER PRIMARY KEY CHECK (id = 1),
     published   INTEGER NOT NULL DEFAULT 0,
-    revealed    INTEGER NOT NULL DEFAULT 0
+    revealed    INTEGER NOT NULL DEFAULT 0,
+    voting_open INTEGER NOT NULL DEFAULT 1
   );
 
   -- Pengaturan umum (logo, maskot, nama organisasi, dll).
@@ -118,103 +121,138 @@ const SCHEMA_SQL = `
 `;
 
 async function seed(db: Client) {
-  const accRes = await db.execute('SELECT COUNT(*) AS c FROM accounts');
-  if (Number(accRes.rows[0].c) === 0) {
-    await db.execute({ sql: 'INSERT INTO accounts (id, label) VALUES (?, ?)', args: [1, 'Akun 1'] });
-    await db.execute({ sql: 'INSERT INTO accounts (id, label) VALUES (?, ?)', args: [2, 'Akun 2'] });
-    await db.execute({ sql: 'INSERT INTO accounts (id, label) VALUES (?, ?)', args: [3, 'Akun 3'] });
+  try {
+    const accRes = await db.execute('SELECT COUNT(*) AS c FROM accounts');
+    const count = Number(accRes.rows[0]?.c ?? accRes.rows[0]?.[0] ?? 0);
+    if (count === 0) {
+      await db.execute({ sql: 'INSERT INTO accounts (id, label) VALUES (?, ?)', args: [1, 'Akun 1'] });
+      await db.execute({ sql: 'INSERT INTO accounts (id, label) VALUES (?, ?)', args: [2, 'Akun 2'] });
+      await db.execute({ sql: 'INSERT INTO accounts (id, label) VALUES (?, ?)', args: [3, 'Akun 3'] });
+    }
+  } catch (e) {
+    console.error('Seed accounts notice:', e);
   }
 
-  const adminRes = await db.execute('SELECT COUNT(*) AS c FROM admin');
-  if (Number(adminRes.rows[0].c) === 0) {
-    const crypto = require('node:crypto') as typeof import('node:crypto');
-    const salt = crypto.randomBytes(16).toString('hex');
-    const password_hash = crypto.scryptSync('admin123', salt, 64).toString('hex');
-    await db.execute({
-      sql: 'INSERT INTO admin (id, username, password_hash, salt) VALUES (1, ?, ?, ?)',
-      args: ['admin', password_hash, salt],
-    });
+  try {
+    const adminRes = await db.execute('SELECT COUNT(*) AS c FROM admin');
+    const count = Number(adminRes.rows[0]?.c ?? adminRes.rows[0]?.[0] ?? 0);
+    if (count === 0) {
+      const crypto = require('node:crypto') as typeof import('node:crypto');
+      const salt = crypto.randomBytes(16).toString('hex');
+      const password_hash = crypto.scryptSync('admin123', salt, 64).toString('hex');
+      await db.execute({
+        sql: 'INSERT INTO admin (id, username, password_hash, salt) VALUES (1, ?, ?, ?)',
+        args: ['admin', password_hash, salt],
+      });
+    }
+  } catch (e) {
+    console.error('Seed admin notice:', e);
   }
 
-  const sbRes = await db.execute('SELECT COUNT(*) AS c FROM scoreboard_state');
-  if (Number(sbRes.rows[0].c) === 0) {
-    await db.execute('INSERT INTO scoreboard_state (id, published, revealed) VALUES (1, 0, 0)');
+  try {
+    const sbRes = await db.execute('SELECT COUNT(*) AS c FROM scoreboard_state');
+    const count = Number(sbRes.rows[0]?.c ?? sbRes.rows[0]?.[0] ?? 0);
+    if (count === 0) {
+      await db.execute('INSERT INTO scoreboard_state (id, published, revealed, voting_open) VALUES (1, 0, 0, 1)');
+    }
+  } catch (e) {
+    console.error('Seed scoreboard notice:', e);
   }
 
-  const setRes = await db.execute('SELECT COUNT(*) AS c FROM settings');
-  if (Number(setRes.rows[0].c) === 0) {
-    await db.execute({
-      sql: 'INSERT INTO settings (id, org_name, org_subtitle, logo_url, mascot_url) VALUES (1, ?, ?, ?, ?)',
-      args: ['BAWASLOS', 'Badan Pengawas Pemilihan Osis — SMK Negeri 64 Jakarta', '/logo.png', '/maskot.png'],
-    });
-  } else {
-    // Jika data settings sudah terbuat tapi logo masih kosong / default lama, update ke /logo.png
-    await db.execute("UPDATE settings SET logo_url = '/logo.png' WHERE id = 1 AND (logo_url IS NULL OR logo_url = '')");
-    await db.execute("UPDATE settings SET mascot_url = '/maskot.png' WHERE id = 1 AND (mascot_url IS NULL OR mascot_url = '')");
-    await db.execute("UPDATE settings SET org_name = 'BAWASLOS' WHERE id = 1 AND (org_name = 'OSIS' OR org_name IS NULL)");
-    await db.execute("UPDATE settings SET org_subtitle = 'Badan Pengawas Pemilihan Osis — SMK Negeri 64 Jakarta' WHERE id = 1 AND (org_subtitle = 'Pemilihan Ketua & Wakil Ketua' OR org_subtitle IS NULL)");
+  try {
+    const setRes = await db.execute('SELECT COUNT(*) AS c FROM settings');
+    const count = Number(setRes.rows[0]?.c ?? setRes.rows[0]?.[0] ?? 0);
+    if (count === 0) {
+      await db.execute({
+        sql: 'INSERT INTO settings (id, org_name, org_subtitle, logo_url, mascot_url) VALUES (1, ?, ?, ?, ?)',
+        args: ['BAWASLOS', 'Badan Pengawas Pemilihan Osis — SMK Negeri 64 Jakarta', '/logo.png', '/maskot.png'],
+      });
+    } else {
+      await db.execute("UPDATE settings SET logo_url = '/logo.png' WHERE id = 1 AND (logo_url IS NULL OR logo_url = '')");
+      await db.execute("UPDATE settings SET mascot_url = '/maskot.png' WHERE id = 1 AND (mascot_url IS NULL OR mascot_url = '')");
+      await db.execute("UPDATE settings SET org_name = 'BAWASLOS' WHERE id = 1 AND (org_name = 'OSIS' OR org_name IS NULL)");
+      await db.execute("UPDATE settings SET org_subtitle = 'Badan Pengawas Pemilihan Osis — SMK Negeri 64 Jakarta' WHERE id = 1 AND (org_subtitle = 'Pemilihan Ketua & Wakil Ketua' OR org_subtitle IS NULL)");
+    }
+  } catch (e) {
+    console.error('Seed settings notice:', e);
   }
 
-  // Seed data default 3 pasangan calon jika tabel masih kosong
-  const pairsRes = await db.execute('SELECT COUNT(*) AS c FROM pairs');
-  if (Number(pairsRes.rows[0].c) === 0) {
-    await db.execute({
-      sql: 'INSERT INTO pairs (number, chair_name, vice_name, vision, photo_url, active) VALUES (?, ?, ?, ?, ?, ?)',
-      args: [1, 'Andi', 'Budi', 'Mewujudkan OSIS yang inovatif, inklusif, dan berprestasi berlandaskan kejujuran serta disiplin.', '/paslon-1.jpg', 1],
-    });
-    await db.execute({
-      sql: 'INSERT INTO pairs (number, chair_name, vice_name, vision, photo_url, active) VALUES (?, ?, ?, ?, ?, ?)',
-      args: [2, 'Citra', 'Dewi', 'Membangun lingkungan sekolah yang aktif dan kreatif melalui program kerja nyata untuk seluruh siswa.', '/paslon-2.jpg', 1],
-    });
-    await db.execute({
-      sql: 'INSERT INTO pairs (number, chair_name, vice_name, vision, photo_url, active) VALUES (?, ?, ?, ?, ?, ?)',
-      args: [3, 'Eka', 'Fajar', 'Menjadikan OSIS wadah aspirasi yang transparan, komunikatif, dan responsif terhadap kebutuhan siswa.', '/paslon-3.jpg', 1],
-    });
+  try {
+    const pairsRes = await db.execute('SELECT COUNT(*) AS c FROM pairs');
+    const count = Number(pairsRes.rows[0]?.c ?? pairsRes.rows[0]?.[0] ?? 0);
+    if (count === 0) {
+      await db.execute({
+        sql: 'INSERT INTO pairs (number, chair_name, vice_name, vision, photo_url, active) VALUES (?, ?, ?, ?, ?, ?)',
+        args: [1, 'Andi', 'Budi', 'Mewujudkan OSIS yang inovatif, inklusif, dan berprestasi berlandaskan kejujuran serta disiplin.', '/paslon-1.jpg', 1],
+      });
+      await db.execute({
+        sql: 'INSERT INTO pairs (number, chair_name, vice_name, vision, photo_url, active) VALUES (?, ?, ?, ?, ?, ?)',
+        args: [2, 'Citra', 'Dewi', 'Membangun lingkungan sekolah yang aktif dan kreatif melalui program kerja nyata untuk seluruh siswa.', '/paslon-2.jpg', 1],
+      });
+      await db.execute({
+        sql: 'INSERT INTO pairs (number, chair_name, vice_name, vision, photo_url, active) VALUES (?, ?, ?, ?, ?, ?)',
+        args: [3, 'Eka', 'Fajar', 'Menjadikan OSIS wadah aspirasi yang transparan, komunikatif, dan responsif terhadap kebutuhan siswa.', '/paslon-3.jpg', 1],
+      });
+    }
+  } catch (e) {
+    console.error('Seed pairs notice:', e);
   }
 
-  // Seed berita default jika belum ada
-  const newsRes = await db.execute('SELECT COUNT(*) AS c FROM news');
-  if (Number(newsRes.rows[0].c) === 0) {
-    await db.execute({
-      sql: 'INSERT INTO news (title, body, cover_url, featured, is_new, published) VALUES (?, ?, ?, ?, ?, ?)',
-      args: [
-        'Open Recruitment Ketua & Wakil Ketua OSIS',
-        'Pendaftaran pasangan calon ketua dan wakil ketua OSIS periode ini telah dibuka. Segera lengkapi berkas persyaratan dan serahkan ke panitia pemilihan. Pemilihan akan dilaksanakan secara elektronik melalui 3 akun pemilih yang disediakan.',
-        '/news-1.jpg',
-        1,
-        0,
-        1,
-      ],
-    });
+  try {
+    const newsRes = await db.execute('SELECT COUNT(*) AS c FROM news');
+    const count = Number(newsRes.rows[0]?.c ?? newsRes.rows[0]?.[0] ?? 0);
+    if (count === 0) {
+      await db.execute({
+        sql: 'INSERT INTO news (title, body, cover_url, featured, is_new, published) VALUES (?, ?, ?, ?, ?, ?)',
+        args: [
+          'Open Recruitment Ketua & Wakil Ketua OSIS',
+          'Pendaftaran pasangan calon ketua dan wakil ketua OSIS periode ini telah dibuka. Segera lengkapi berkas persyaratan dan serahkan ke panitia pemilihan. Pemilihan akan dilaksanakan secara elektronik melalui 3 akun pemilih yang disediakan.',
+          '/news-1.jpg',
+          1,
+          0,
+          1,
+        ],
+      });
+    }
+  } catch (e) {
+    console.error('Seed news notice:', e);
   }
 
-  const rulesRes = await db.execute('SELECT COUNT(*) AS c FROM rules');
-  if (Number(rulesRes.rows[0].c) === 0) {
-    const draft = [
-      '1. Pemilihan dilaksanakan secara elektronik melalui 3 akun pemilih yang disediakan pengawas.',
-      '2. Setiap akun hanya dapat menjatuhkan satu suara (satu sesi = satu pilihan).',
-      '3. Token bersifat rahasia dan hanya diberikan langsung oleh pengawas pemilihan.',
-      '4. Pemilih menyalin nomor urut global (Pemilih ke-1, 2, 3, …) yang muncul setelah memilih.',
-      '5. Hasil diumumkan secara bertahap (reveal) oleh pengawas melalui scoreboard resmi.',
-      '6. Keputusan pengawas bersifat final.',
-    ].join('\n');
-    await db.execute({
-      sql: 'INSERT INTO rules (id, headline, body) VALUES (1, ?, ?)',
-      args: ['Peraturan & Tata Cara Pemilihan', draft],
-    });
+  try {
+    const rulesRes = await db.execute('SELECT COUNT(*) AS c FROM rules');
+    const count = Number(rulesRes.rows[0]?.c ?? rulesRes.rows[0]?.[0] ?? 0);
+    if (count === 0) {
+      const draft = [
+        '1. Pemilihan dilaksanakan secara elektronik melalui 3 akun pemilih yang disediakan pengawas.',
+        '2. Setiap akun hanya dapat menjatuhkan satu suara (satu sesi = satu pilihan).',
+        '3. Token bersifat rahasia dan hanya diberikan langsung oleh pengawas pemilihan.',
+        '4. Pemilih menyalin nomor urut global (Pemilih ke-1, 2, 3, …) yang muncul setelah memilih.',
+        '5. Hasil diumumkan secara bertahap (reveal) oleh pengawas melalui scoreboard resmi.',
+        '6. Keputusan pengawas bersifat final.',
+      ].join('\n');
+      await db.execute({
+        sql: 'INSERT INTO rules (id, headline, body) VALUES (1, ?, ?)',
+        args: ['Peraturan & Tata Cara Pemilihan', draft],
+      });
+    }
+  } catch (e) {
+    console.error('Seed rules notice:', e);
   }
 }
 
 async function migrate(db: Client) {
-  const newsCols = (await db.execute('PRAGMA table_info(news)')).rows as unknown as { name: string }[];
-  const has = (c: string) => newsCols.some((x) => x.name === c);
-  if (!has('cover_url')) await db.execute('ALTER TABLE news ADD COLUMN cover_url TEXT');
-  if (!has('featured')) await db.execute('ALTER TABLE news ADD COLUMN featured INTEGER NOT NULL DEFAULT 0');
-  if (!has('is_new')) await db.execute('ALTER TABLE news ADD COLUMN is_new INTEGER NOT NULL DEFAULT 0');
-
-  const sbCols = (await db.execute('PRAGMA table_info(scoreboard_state)')).rows as unknown as { name: string }[];
-  const sbHas = (c: string) => sbCols.some((x) => x.name === c);
-  if (!sbHas('voting_open')) await db.execute('ALTER TABLE scoreboard_state ADD COLUMN voting_open INTEGER NOT NULL DEFAULT 1');
+  try {
+    await db.execute('ALTER TABLE news ADD COLUMN cover_url TEXT');
+  } catch {}
+  try {
+    await db.execute('ALTER TABLE news ADD COLUMN featured INTEGER NOT NULL DEFAULT 0');
+  } catch {}
+  try {
+    await db.execute('ALTER TABLE news ADD COLUMN is_new INTEGER NOT NULL DEFAULT 0');
+  } catch {}
+  try {
+    await db.execute('ALTER TABLE scoreboard_state ADD COLUMN voting_open INTEGER NOT NULL DEFAULT 1');
+  } catch {}
 }
 
 export function getDb(): Client {
@@ -224,7 +262,7 @@ export function getDb(): Client {
   const authToken = process.env.TURSO_AUTH_TOKEN || process.env.turso_auth_token;
 
   if (!url) {
-    // Di Vercel serverless, hanya folder /tmp yang memiliki akses tulis (writable).
+    // Di Vercel serverless, folder /tmp adalah direktori yang memiliki akses tulis (writable).
     // Di lokal, gunakan folder .data di root project.
     const isVercel = Boolean(process.env.VERCEL);
     const dbPath = isVercel
@@ -256,9 +294,13 @@ export async function ensureDb(): Promise<Client> {
   const db = getDb();
   if (!globalForDb.__bawaslosDbInit) {
     globalForDb.__bawaslosDbInit = (async () => {
-      await db.executeMultiple(SCHEMA_SQL);
-      await seed(db);
+      try {
+        await db.executeMultiple(SCHEMA_SQL);
+      } catch (e) {
+        console.error('executeMultiple schema notice:', e);
+      }
       await migrate(db);
+      await seed(db);
     })().catch((err) => {
       globalForDb.__bawaslosDbInit = undefined;
       console.error('Error saat inisialisasi database:', err);
