@@ -56,7 +56,7 @@ export async function voterLogin(
   accountId: number,
   token: string
 ): Promise<{ ok: boolean; error?: string; voterNo?: number }> {
-  const clean = token.trim().toUpperCase();
+  const clean = token.trim().toUpperCase().replace(/\s+/g, '');
 
   // 1. Cek pada daftar pemilih massal / DPT (1-300 dst)
   const voter = await getVoterByToken(clean);
