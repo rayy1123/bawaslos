@@ -211,12 +211,26 @@ export async function castVote(accountId: number, pairId: number, voterId?: numb
   const db = await ensureDb();
   const tx = await db.transaction('write');
   try {
+    // Validasi ganda jika token pemilih massal (DPT): pastikan belum digunakan sama sekali
+    if (voterId) {
+      const check = await tx.execute({
+        sql: 'SELECT is_used FROM voters WHERE id = ?',
+        args: [voterId],
+      });
+      const isUsed = Number(check.rows[0]?.is_used ?? 1);
+      if (isUsed === 1) {
+        throw new Error('Hak suara untuk token ini sudah digunakan sebelumnya.');
+      }
+    }
+
     const maxRow = (await tx.execute('SELECT COALESCE(MAX(voter_no),0) AS m FROM votes')).rows[0] as unknown as { m: number };
     const nextNo = Number(maxRow.m) + 1;
+
     await tx.execute({
       sql: 'INSERT INTO votes (voter_no, account_id, pair_id) VALUES (?, ?, ?)',
       args: [nextNo, accountId, pairId],
     });
+
     // Hancurkan token akun agar tidak bisa digunakan kembali (single-use token)
     await tx.execute({
       sql: 'UPDATE accounts SET token_hash = NULL, token_hint = NULL WHERE id = ?',
@@ -227,10 +241,10 @@ export async function castVote(accountId: number, pairId: number, voterId?: numb
       args: [accountId],
     });
 
-    // Jika pemilih menggunakan token DPT / massal, tandai sudah memilih
+    // Jika pemilih menggunakan token DPT / massal, tandai sudah memilih secara atomik
     if (voterId) {
       await tx.execute({
-        sql: `UPDATE voters SET is_used = 1, used_at = datetime('now'), used_booth = ? WHERE id = ?`,
+        sql: `UPDATE voters SET is_used = 1, used_at = datetime('now'), used_booth = ? WHERE id = ? AND is_used = 0`,
         args: [accountId, voterId],
       });
     }
