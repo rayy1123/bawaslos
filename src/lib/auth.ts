@@ -53,10 +53,17 @@ export function signAdminSession(): string {
 }
 
 export function verifyAdminSession(token: string): boolean {
-  const [payload, sig] = token.split('.');
-  if (!payload || !sig) return false;
-  const expected = crypto.createHmac('sha256', sessionSecret()).update(payload).digest('hex');
-  return crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(expected));
+  try {
+    const [payload, sig] = token.split('.');
+    if (!payload || !sig) return false;
+    const expected = crypto.createHmac('sha256', sessionSecret()).update(payload).digest('hex');
+    const a = Buffer.from(sig);
+    const b = Buffer.from(expected);
+    if (a.length !== b.length) return false;
+    return crypto.timingSafeEqual(a, b);
+  } catch {
+    return false;
+  }
 }
 
 // Sesi voter disimpan juga sebagai token bertanda (signed) di cookie.
@@ -66,9 +73,16 @@ export function signVoterSession(tokenPlain: string): string {
 }
 
 export function verifyVoterSession(signed: string): string | null {
-  const [tokenPlain, sig] = signed.split('.');
-  if (!tokenPlain || !sig) return null;
-  const expected = crypto.createHmac('sha256', sessionSecret()).update(tokenPlain).digest('hex');
-  if (!crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(expected))) return null;
-  return tokenPlain;
+  try {
+    const [tokenPlain, sig] = signed.split('.');
+    if (!tokenPlain || !sig) return null;
+    const expected = crypto.createHmac('sha256', sessionSecret()).update(tokenPlain).digest('hex');
+    const a = Buffer.from(sig);
+    const b = Buffer.from(expected);
+    if (a.length !== b.length) return null;
+    if (!crypto.timingSafeEqual(a, b)) return null;
+    return tokenPlain;
+  } catch {
+    return null;
+  }
 }
