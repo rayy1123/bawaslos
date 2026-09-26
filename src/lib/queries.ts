@@ -461,37 +461,41 @@ export async function generateVotersBatch(fromNo: number, toNo: number): Promise
   const db = await ensureDb();
   const start = Math.max(1, Math.floor(fromNo));
   const end = Math.max(start, Math.floor(toNo));
-  const tx = await db.transaction('write');
-  try {
-    let count = 0;
-    for (let n = start; n <= end; n++) {
+
+  // Gunakan multi-row INSERT dalam batch (chunk 50 baris per query)
+  // agar sangat cepat di cloud Turso dan tidak terkena timeout Vercel (10 detik limit).
+  const CHUNK_SIZE = 50;
+  let count = 0;
+
+  for (let current = start; current <= end; current += CHUNK_SIZE) {
+    const chunkEnd = Math.min(current + CHUNK_SIZE - 1, end);
+    const valuePlaceholders: string[] = [];
+    const params: (string | number)[] = [];
+
+    for (let n = current; n <= chunkEnd; n++) {
       const token = generateToken(8);
       const padNo = String(n).padStart(3, '0');
       const name = `Pemilih ${padNo}`;
-      await tx.execute({
-        sql: `
-          INSERT INTO voters (voter_no, name, token, is_used, used_at, used_booth)
-          VALUES (?, ?, ?, 0, NULL, NULL)
-          ON CONFLICT(voter_no) DO UPDATE SET
-            token = excluded.token,
-            is_used = 0,
-            used_at = NULL,
-            used_booth = NULL
-        `,
-        args: [n, name, token],
-      });
+      valuePlaceholders.push('(?, ?, ?, 0, NULL, NULL)');
+      params.push(n, name, token);
       count++;
     }
-    await tx.execute({
-      sql: 'INSERT INTO audit (action, detail) VALUES (?, ?)',
-      args: ['VOTERS_GENERATED', `Generate ${count} token pemilih (No. Urut ${start} - ${end})`],
-    });
-    await tx.commit();
-    return { count, start, end };
-  } catch (e) {
-    await tx.rollback();
-    throw e;
+
+    const sql = `
+      INSERT INTO voters (voter_no, name, token, is_used, used_at, used_booth)
+      VALUES ${valuePlaceholders.join(', ')}
+      ON CONFLICT(voter_no) DO UPDATE SET
+        token = excluded.token,
+        is_used = 0,
+        used_at = NULL,
+        used_booth = NULL
+    `;
+
+    await db.execute({ sql, args: params });
   }
+
+  await audit('VOTERS_GENERATED', `Generate ${count} token pemilih (No. Urut ${start} - ${end})`);
+  return { count, start, end };
 }
 
 export async function listVoters(options?: {
@@ -542,9 +546,9 @@ export async function listVoters(options?: {
 
 export async function getVoterByToken(token: string): Promise<VoterRecord | undefined> {
   const db = await ensureDb();
-  const clean = token.trim().toUpperCase();
+  const clean = token.trim().toUpperCase().replace(/\s+/g, '');
   const res = await db.execute({
-    sql: 'SELECT * FROM voters WHERE UPPER(token) = ?',
+    sql: 'SELECT * FROM voters WHERE UPPER(TRIM(token)) = ?',
     args: [clean],
   });
   return plainOne(res.rows[0] as unknown as VoterRecord | undefined);
