@@ -69,13 +69,6 @@ export default function MpkLogo({
             <span className="text-[7px] font-black uppercase tracking-tighter">MPK 64</span>
           </div>
         </div>
-
-        {/* 5. Floating Badge Accent */}
-        {animated && (
-          <div className="absolute -top-1.5 z-20 flex items-center justify-center rounded-full bg-[#0b1f4b] px-2 py-0.5 text-[9px] font-extrabold text-[#c9a64a] shadow-sm border border-[#b0892f]/50">
-            ★ MPK ★
-          </div>
-        )}
       </div>
 
       {/* Typography Description Badge */}
