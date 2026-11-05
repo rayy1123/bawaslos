@@ -118,6 +118,18 @@ const SCHEMA_SQL = `
   );
   CREATE INDEX IF NOT EXISTS idx_voters_token ON voters(token);
   CREATE INDEX IF NOT EXISTS idx_voters_no ON voters(voter_no);
+
+  -- State timer panggung debat & pertanyaan (dikendalikan admin).
+  CREATE TABLE IF NOT EXISTS timer_state (
+    id          INTEGER PRIMARY KEY CHECK (id = 1),
+    title       TEXT NOT NULL DEFAULT 'Sesi Debat & Tanya Jawab',
+    speaker     TEXT NOT NULL DEFAULT 'all',
+    duration    INTEGER NOT NULL DEFAULT 120,
+    remaining   INTEGER NOT NULL DEFAULT 120,
+    is_running  INTEGER NOT NULL DEFAULT 0,
+    target_end  INTEGER NOT NULL DEFAULT 0,
+    updated_at  TEXT NOT NULL DEFAULT (datetime('now'))
+  );
 `;
 
 async function seed(db: Client) {
@@ -252,6 +264,27 @@ async function migrate(db: Client) {
   } catch {}
   try {
     await db.execute('ALTER TABLE scoreboard_state ADD COLUMN voting_open INTEGER NOT NULL DEFAULT 1');
+  } catch {}
+  try {
+    await db.execute(`
+      CREATE TABLE IF NOT EXISTS timer_state (
+        id          INTEGER PRIMARY KEY CHECK (id = 1),
+        title       TEXT NOT NULL DEFAULT 'Sesi Debat & Tanya Jawab',
+        speaker     TEXT NOT NULL DEFAULT 'all',
+        duration    INTEGER NOT NULL DEFAULT 120,
+        remaining   INTEGER NOT NULL DEFAULT 120,
+        is_running  INTEGER NOT NULL DEFAULT 0,
+        target_end  INTEGER NOT NULL DEFAULT 0,
+        updated_at  TEXT NOT NULL DEFAULT (datetime('now'))
+      )
+    `);
+    const countRes = await db.execute('SELECT COUNT(*) AS c FROM timer_state');
+    if (Number(countRes.rows[0]?.c ?? 0) === 0) {
+      await db.execute(`
+        INSERT INTO timer_state (id, title, speaker, duration, remaining, is_running, target_end)
+        VALUES (1, 'Sesi Debat & Tanya Jawab', 'all', 120, 120, 0, 0)
+      `);
+    }
   } catch {}
 }
 

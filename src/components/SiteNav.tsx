@@ -8,6 +8,7 @@ const NAV = [
   { href: '/', label: 'Kandidat' },
   { href: '/berita', label: 'Berita' },
   { href: '/panduan', label: 'Panduan' },
+  { href: '/timer', label: 'Timer' },
   { href: '/vote', label: 'Voting' },
   { href: '/scoreboard', label: 'Scoreboard' },
 ];

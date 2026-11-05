@@ -112,6 +112,21 @@ body {
   .logo-enter { animation: none; }
 }
 
+/* MPK & Timer Animations */
+@keyframes spinSlow {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+@keyframes timerPulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.82; transform: scale(1.02); }
+}
+
+.animate-timer-pulse {
+  animation: timerPulse 1s ease-in-out infinite;
+}
+
 /* main buttons: ink solid, hover gold */
 .btn-ink {
   background: var(--ink);

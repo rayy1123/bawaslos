@@ -13,6 +13,7 @@ import {
   getRules,
   listVoters,
   getVotersStats,
+  getTimerState,
 } from '@/lib/queries';
 import AdminDashboard from './admin-dashboard';
 
@@ -32,6 +33,7 @@ export default async function AdminPage() {
   const { voters } = await listVoters({ limit: 1000 });
   const votersStats = await getVotersStats();
   const votingOpen = await getVotingOpen();
+  const timer = await getTimerState();
   return (
     <AdminDashboard
       pairs={pairs}
@@ -46,6 +48,7 @@ export default async function AdminPage() {
       votingOpen={votingOpen}
       rules={{ headline: rules.headline, body: rules.body }}
       settings={{ org_name: settings.org_name, org_subtitle: settings.org_subtitle, logo_url: settings.logo_url, mascot_url: settings.mascot_url }}
+      timer={timer}
     />
   );
 }

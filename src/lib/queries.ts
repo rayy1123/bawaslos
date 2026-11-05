@@ -598,3 +598,122 @@ export async function resetAllVoters(): Promise<void> {
   await db.execute('DELETE FROM voters');
   await audit('VOTERS_RESET', 'Seluruh data token pemilih massal dihapus');
 }
+
+// ---------- TIMER DEBAT & PERTANYAAN (KONTROL ADMIN) ----------
+export type TimerState = {
+  title: string;
+  speaker: string;
+  duration: number;
+  remaining: number;
+  is_running: boolean;
+  target_end: number;
+  server_now: number;
+};
+
+export async function getTimerState(): Promise<TimerState> {
+  const db = await ensureDb();
+  const res = await db.execute('SELECT * FROM timer_state WHERE id = 1');
+  const row = res.rows[0];
+  const now = Date.now();
+
+  if (!row) {
+    return {
+      title: 'Sesi Debat & Tanya Jawab',
+      speaker: 'all',
+      duration: 120,
+      remaining: 120,
+      is_running: false,
+      target_end: 0,
+      server_now: now,
+    };
+  }
+
+  const duration = Number(row.duration ?? 120);
+  const is_running = Boolean(row.is_running);
+  const target_end = Number(row.target_end ?? 0);
+  let remaining = Number(row.remaining ?? duration);
+
+  if (is_running && target_end > 0) {
+    remaining = Math.max(0, Math.round((target_end - now) / 1000));
+  }
+
+  return {
+    title: String(row.title ?? 'Sesi Debat & Tanya Jawab'),
+    speaker: String(row.speaker ?? 'all'),
+    duration,
+    remaining,
+    is_running: is_running && remaining > 0,
+    target_end,
+    server_now: now,
+  };
+}
+
+export async function setTimerState(data: {
+  action: 'start' | 'pause' | 'reset' | 'set' | 'adjust';
+  duration?: number;
+  title?: string;
+  speaker?: string;
+  delta?: number;
+}): Promise<TimerState> {
+  const db = await ensureDb();
+  const current = await getTimerState();
+  const now = Date.now();
+
+  let { title, speaker, duration, remaining, is_running, target_end } = current;
+
+  if (data.title !== undefined) title = data.title;
+  if (data.speaker !== undefined) speaker = data.speaker;
+
+  if (data.action === 'set') {
+    if (data.duration !== undefined && data.duration > 0) {
+      duration = data.duration;
+      remaining = data.duration;
+      is_running = false;
+      target_end = 0;
+    }
+  } else if (data.action === 'start') {
+    if (remaining <= 0) remaining = duration;
+    is_running = true;
+    target_end = now + remaining * 1000;
+  } else if (data.action === 'pause') {
+    if (is_running && target_end > 0) {
+      remaining = Math.max(0, Math.round((target_end - now) / 1000));
+    }
+    is_running = false;
+    target_end = 0;
+  } else if (data.action === 'reset') {
+    remaining = duration;
+    is_running = false;
+    target_end = 0;
+  } else if (data.action === 'adjust' && data.delta) {
+    if (is_running && target_end > 0) {
+      target_end = target_end + data.delta * 1000;
+      remaining = Math.max(0, Math.round((target_end - now) / 1000));
+    } else {
+      remaining = Math.max(0, remaining + data.delta);
+    }
+  }
+
+  await db.execute({
+    sql: `UPDATE timer_state SET
+      title = ?,
+      speaker = ?,
+      duration = ?,
+      remaining = ?,
+      is_running = ?,
+      target_end = ?,
+      updated_at = datetime('now')
+      WHERE id = 1`,
+    args: [title, speaker, duration, remaining, is_running ? 1 : 0, target_end],
+  });
+
+  return {
+    title,
+    speaker,
+    duration,
+    remaining,
+    is_running: is_running && remaining > 0,
+    target_end,
+    server_now: now,
+  };
+}

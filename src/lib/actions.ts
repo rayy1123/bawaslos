@@ -27,6 +27,8 @@ import {
   setVotingOpen,
   generateVotersBatch,
   resetAllVoters,
+  getTimerState,
+  setTimerState,
 } from './queries';
 import { hashPassword, makeSalt } from './auth';
 import { ensureDb } from './db';
@@ -315,4 +317,22 @@ export async function listAccountsAction() {
     label: a.label,
     has_token: a.has_token,
   }));
+}
+
+// ---------- TIMER DEBAT KONTROL (ADMIN) ----------
+export async function getTimerAction() {
+  return await getTimerState();
+}
+
+export async function controlTimerAction(data: {
+  action: 'start' | 'pause' | 'reset' | 'set' | 'adjust';
+  duration?: number;
+  title?: string;
+  speaker?: string;
+  delta?: number;
+}) {
+  if (!(await isAdmin())) return { ok: false, error: 'Tidak berwenang.' };
+  const res = await setTimerState(data);
+  revalidatePath('/timer');
+  return { ok: true, state: res };
 }

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useTransition } from 'react';
+import { useState, useEffect, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import {
@@ -21,8 +21,9 @@ import {
   saveSettingsAction,
   generateVotersAction,
   resetVotersAction,
+  controlTimerAction,
 } from '@/lib/actions';
-import type { Pair, NewsItem, Account, VoterRecord } from '@/lib/queries';
+import type { Pair, NewsItem, Account, VoterRecord, TimerState } from '@/lib/queries';
 import LogoSeal from '@/components/LogoSeal';
 
 function readFileAsDataURL(file: File): Promise<string> {
@@ -47,6 +48,7 @@ type Props = {
   votingOpen: boolean;
   rules: { headline: string; body: string };
   settings: { org_name: string; org_subtitle: string; logo_url: string; mascot_url: string };
+  timer?: TimerState;
 };
 
 export default function AdminDashboard({
@@ -62,13 +64,29 @@ export default function AdminDashboard({
   votingOpen,
   rules,
   settings,
+  timer,
 }: Props) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
 
-  const [active, setActive] = useState<'overview' | 'tokens' | 'scoreboard' | 'pairs' | 'news' | 'panduan' | 'audit' | 'settings'>('overview');
+  const [active, setActive] = useState<'overview' | 'timer' | 'tokens' | 'scoreboard' | 'pairs' | 'news' | 'panduan' | 'audit' | 'settings'>('overview');
   const [tokenModal, setTokenModal] = useState<{ accountId: number; token: string } | null>(null);
   const [copiedToken, setCopiedToken] = useState<string | null>(null);
+
+  // Live Timer Control State
+  const [timerState, setTimerState] = useState<TimerState>(timer || {
+    title: 'Sesi Debat & Tanya Jawab',
+    speaker: 'all',
+    duration: 120,
+    remaining: 120,
+    is_running: false,
+    target_end: 0,
+    server_now: Date.now(),
+  });
+  const [timerDisplayLeft, setTimerDisplayLeft] = useState<number>(timer?.remaining ?? 120);
+  const [timerCustomMin, setTimerCustomMin] = useState<number>(2);
+  const [timerCustomSec, setTimerCustomSec] = useState<number>(0);
+  const [timerTitleInput, setTimerTitleInput] = useState<string>(timer?.title || 'Sesi Debat & Tanya Jawab');
 
   const [pwBusy, setPwBusy] = useState(false);
   const [revealDraft, setRevealDraft] = useState(scoreboard.revealed);
@@ -114,6 +132,56 @@ export default function AdminDashboard({
       setTimeout(() => setCopiedToken(null), 2500);
     } catch {
       notify('Gagal menyalin token ke clipboard.', 'error');
+    }
+  }
+
+  // 1. Polling sync with timer state
+  useEffect(() => {
+    let isSubscribed = true;
+    async function syncTimer() {
+      try {
+        const res = await fetch('/api/timer', { cache: 'no-store' });
+        if (res.ok && isSubscribed) {
+          const data: TimerState = await res.json();
+          setTimerState(data);
+          if (data.is_running && data.target_end > 0) {
+            setTimerDisplayLeft(Math.max(0, Math.round((data.target_end - Date.now()) / 1000)));
+          } else {
+            setTimerDisplayLeft(data.remaining);
+          }
+        }
+      } catch {}
+    }
+    const interval = setInterval(syncTimer, 1000);
+    return () => {
+      isSubscribed = false;
+      clearInterval(interval);
+    };
+  }, []);
+
+  // 2. High-precision local countdown ticker
+  useEffect(() => {
+    const tick = setInterval(() => {
+      if (timerState.is_running && timerState.target_end > 0) {
+        setTimerDisplayLeft(Math.max(0, Math.round((timerState.target_end - Date.now()) / 1000)));
+      } else {
+        setTimerDisplayLeft(timerState.remaining);
+      }
+    }, 500);
+    return () => clearInterval(tick);
+  }, [timerState.is_running, timerState.target_end, timerState.remaining]);
+
+  async function handleTimerControl(
+    action: 'start' | 'pause' | 'reset' | 'set' | 'adjust',
+    opts?: { duration?: number; title?: string; speaker?: string; delta?: number }
+  ) {
+    const res = await controlTimerAction({ action, ...opts });
+    if (res.ok && res.state) {
+      setTimerState(res.state);
+      setTimerDisplayLeft(res.state.remaining);
+      notify(`Timer: ${action.toUpperCase()}`);
+    } else {
+      notify(res.error || 'Gagal mengubah timer.', 'error');
     }
   }
 
@@ -424,6 +492,7 @@ export default function AdminDashboard({
         <nav className="mt-4 sm:mt-6 flex gap-1.5 overflow-x-auto pb-1 pt-0.5 no-scrollbar scroll-smooth">
           {[
             { id: 'overview', label: 'Ringkasan', icon: '⚡' },
+            { id: 'timer', label: 'Timer Panggung', icon: '⏱️', badge: timerState.is_running ? '● Live' : undefined },
             { id: 'tokens', label: 'DPT & Token', icon: '🎟️', count: voters.length },
             { id: 'scoreboard', label: 'Scoreboard', icon: '🏆', badge: `${scoreboard.revealed}/${scoreboard.total}` },
             { id: 'pairs', label: 'Paslon', icon: '👥', count: pairs.length },
@@ -527,13 +596,29 @@ export default function AdminDashboard({
               </div>
 
               {/* Quick Actions Grid */}
-              <div className="grid gap-3 sm:grid-cols-3">
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                <div
+                  onClick={() => setActive('timer')}
+                  className="cursor-pointer rounded-2xl border border-amber-200/80 bg-[#fbf6ea] p-4 transition-all hover:bg-[#f6ebd4]"
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="text-xl">⏱️</span>
+                    <span className={`text-[10px] font-black rounded-full px-2 py-0.5 ${timerState.is_running ? 'bg-red-500 text-white animate-pulse' : 'bg-slate-200 text-slate-700'}`}>
+                      {timerState.is_running ? '● Live' : 'Jeda'}
+                    </span>
+                  </div>
+                  <h3 className="mt-1 font-bold text-[#0b1f4b]">Timer Debat &amp; Tanya Jawab</h3>
+                  <p className="mt-0.5 text-xs text-slate-600">
+                    Kendalikan waktu layar panggung. Sisa: {String(Math.floor(timerDisplayLeft / 60)).padStart(2, '0')}:{String(timerDisplayLeft % 60).padStart(2, '0')}.
+                  </p>
+                </div>
+
                 <div
                   onClick={() => setActive('tokens')}
                   className="cursor-pointer rounded-2xl border border-blue-100 bg-blue-50/40 p-4 transition-all hover:bg-blue-50/70"
                 >
                   <span className="text-xl">🎟️</span>
-                  <h3 className="mt-1 font-bold text-[#0b1f4b]">Daftar Pemilih & Token</h3>
+                  <h3 className="mt-1 font-bold text-[#0b1f4b]">Daftar Pemilih &amp; Token</h3>
                   <p className="mt-0.5 text-xs text-slate-600">
                     Kelola {voters.length} token pemilih, cetak slip kartu atau unduh Excel.
                   </p>
@@ -544,7 +629,7 @@ export default function AdminDashboard({
                   className="cursor-pointer rounded-2xl border border-amber-100 bg-amber-50/40 p-4 transition-all hover:bg-amber-50/70"
                 >
                   <span className="text-xl">🏆</span>
-                  <h3 className="mt-1 font-bold text-[#0b1f4b]">Scoreboard & Perolehan</h3>
+                  <h3 className="mt-1 font-bold text-[#0b1f4b]">Scoreboard &amp; Perolehan</h3>
                   <p className="mt-0.5 text-xs text-slate-600">
                     Umumkan hasil suara bertahap (reveal) atau ekspor laporan suara.
                   </p>
@@ -559,6 +644,275 @@ export default function AdminDashboard({
                   <p className="mt-0.5 text-xs text-slate-600">
                     Ubah data profil, foto, dan visi misi 3 pasangan calon.
                   </p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* TAB: TIMER PANGGUNG DEBAT & PERTANYAAN */}
+          {active === 'timer' && (
+            <div className="space-y-5 sm:space-y-6">
+              <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
+                <div>
+                  <h2 className="font-serif text-lg sm:text-xl font-bold text-[#0b1f4b]">
+                    Kontrol Timer Panggung Debat &amp; Pertanyaan
+                  </h2>
+                  <p className="mt-0.5 text-xs text-slate-500">
+                    Kendalikan satu timer besar di layar proyektor / panggung secara fleksibel dan real-time.
+                  </p>
+                </div>
+
+                <Link
+                  href="/timer"
+                  target="_blank"
+                  className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#c9a64a] px-4 py-2 text-xs font-black text-[#0b1f4b] shadow-sm hover:bg-[#d8b55c] active:scale-95"
+                >
+                  <span>⛶ Buka Layar Panggung (/timer)</span>
+                  <span className="text-base">↗</span>
+                </Link>
+              </div>
+
+              {/* LIVE MONITOR PREVIEW & PRIMARY CONTROLS */}
+              <div className="rounded-2xl border-2 border-[#0b1f4b] bg-gradient-to-b from-[#07132a] to-[#040b17] p-5 text-white shadow-lg">
+                <div className="flex flex-col items-center justify-between gap-3 border-b border-white/10 pb-4 sm:flex-row">
+                  <div className="flex items-center gap-2">
+                    <span className="relative flex h-3 w-3">
+                      {timerState.is_running && (
+                        <span className="absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75 animate-ping" />
+                      )}
+                      <span className={`relative inline-flex h-3 w-3 rounded-full ${timerState.is_running ? 'bg-emerald-500' : 'bg-amber-500'}`} />
+                    </span>
+                    <span className="font-mono text-xs font-bold uppercase tracking-widest text-[#c9a64a]">
+                      {timerState.is_running ? 'TIMER SEDANG BERJALAN' : 'TIMER DIJEDA / SIAP'}
+                    </span>
+                  </div>
+
+                  <span className="text-xs font-medium text-slate-300">
+                    Sesi: <b className="text-white">{timerState.title}</b>
+                  </span>
+                </div>
+
+                {/* Mirror Countdown Digits */}
+                <div className="my-5 select-none text-center sm:my-7">
+                  <div className="font-mono text-6xl font-black tracking-tight text-white drop-shadow-md sm:text-8xl">
+                    {String(Math.floor(timerDisplayLeft / 60)).padStart(2, '0')}:
+                    {String(timerDisplayLeft % 60).padStart(2, '0')}
+                  </div>
+                  <p className="mt-2 text-xs text-slate-400">
+                    Durasi Acuan: {Math.floor(timerState.duration / 60)}m {timerState.duration % 60 > 0 ? `${timerState.duration % 60}s` : ''} · Pembicara:{' '}
+                    <span className="font-bold text-[#c9a64a]">
+                      {timerState.speaker.startsWith('paslon-')
+                        ? `Paslon ${timerState.speaker.replace('paslon-', '')}`
+                        : timerState.speaker === 'mod'
+                        ? 'Moderator'
+                        : 'Semua'}
+                    </span>
+                  </p>
+                </div>
+
+                {/* Primary Action Buttons */}
+                <div className="flex flex-wrap items-center justify-center gap-2.5 pt-1">
+                  <button
+                    onClick={() => handleTimerControl(timerState.is_running ? 'pause' : 'start')}
+                    className={`inline-flex items-center justify-center gap-2 rounded-xl px-7 py-3 text-sm font-black tracking-wider transition-all shadow-md active:scale-95 ${
+                      timerState.is_running
+                        ? 'bg-amber-500 text-slate-900 hover:bg-amber-400'
+                        : 'bg-emerald-500 text-white hover:bg-emerald-400 ring-2 ring-emerald-300/50'
+                    }`}
+                  >
+                    <span>{timerState.is_running ? '⏸ JEDA TIMER' : '▶ MULAI TIMER'}</span>
+                  </button>
+
+                  <button
+                    onClick={() => handleTimerControl('reset')}
+                    className="rounded-xl border border-white/20 bg-white/10 px-5 py-3 text-sm font-bold text-white hover:bg-white/20 active:scale-95"
+                  >
+                    ↺ Reset
+                  </button>
+
+                  <div className="ml-0 flex items-center gap-1.5 sm:ml-2">
+                    <button
+                      onClick={() => handleTimerControl('adjust', { delta: 30 })}
+                      className="rounded-xl border border-white/20 bg-white/10 px-3 py-2 text-xs font-bold text-slate-200 hover:bg-white/20"
+                      title="Tambah 30 Detik"
+                    >
+                      +30s
+                    </button>
+                    <button
+                      onClick={() => handleTimerControl('adjust', { delta: 15 })}
+                      className="rounded-xl border border-white/20 bg-white/10 px-3 py-2 text-xs font-bold text-slate-200 hover:bg-white/20"
+                      title="Tambah 15 Detik"
+                    >
+                      +15s
+                    </button>
+                    <button
+                      onClick={() => handleTimerControl('adjust', { delta: -10 })}
+                      className="rounded-xl border border-white/20 bg-white/10 px-3 py-2 text-xs font-bold text-slate-200 hover:bg-white/20"
+                      title="Kurang 10 Detik"
+                    >
+                      -10s
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* SECTION: ATUR DURASI FLEKSIBEL & CEPAT */}
+              <div className="rounded-2xl border border-slate-200 bg-white p-4 sm:p-5 shadow-xs">
+                <h3 className="font-serif text-sm sm:text-base font-bold text-[#0b1f4b]">1. Atur Durasi Waktu</h3>
+                <p className="text-xs text-slate-500">Pilih durasi cepat atau masukkan durasi kustom (menit:detik).</p>
+
+                {/* Preset Buttons Grid */}
+                <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-7">
+                  {[
+                    { label: '15 Detik', sec: 15, note: 'Tanya Cepat' },
+                    { label: '30 Detik', sec: 30, note: 'Klarifikasi' },
+                    { label: '45 Detik', sec: 45, note: 'Baca Soal' },
+                    { label: '1 Menit', sec: 60, note: 'Sanggahan' },
+                    { label: '90 Detik', sec: 90, note: 'Menjawab' },
+                    { label: '2 Menit', sec: 120, note: 'Debat' },
+                    { label: '3 Menit', sec: 180, note: 'Visi Misi' },
+                  ].map((p) => (
+                    <button
+                      key={p.sec}
+                      onClick={() => handleTimerControl('set', { duration: p.sec })}
+                      className={`flex flex-col items-center justify-center rounded-xl border p-2 text-center transition-all ${
+                        timerState.duration === p.sec
+                          ? 'border-[#0b1f4b] bg-[#0b1f4b] text-white shadow-sm'
+                          : 'border-slate-200 bg-slate-50 text-slate-700 hover:border-slate-300 hover:bg-white'
+                      }`}
+                    >
+                      <span className="font-mono text-xs sm:text-sm font-black">{p.label}</span>
+                      <span className="text-[9px] opacity-75">{p.note}</span>
+                    </button>
+                  ))}
+                </div>
+
+                {/* Custom Time Input */}
+                <div className="mt-3.5 flex flex-wrap items-end gap-2 border-t border-slate-100 pt-3">
+                  <div>
+                    <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Menit</label>
+                    <input
+                      type="number"
+                      min={0}
+                      max={60}
+                      value={timerCustomMin}
+                      onChange={(e) => setTimerCustomMin(Math.max(0, Number(e.target.value)))}
+                      className="mt-1 w-16 sm:w-20 rounded-xl border border-slate-200 p-1.5 sm:p-2 text-center font-mono text-sm font-bold focus:border-[#0b1f4b] focus:outline-none"
+                    />
+                  </div>
+                  <span className="pb-1.5 text-lg font-bold text-slate-400">:</span>
+                  <div>
+                    <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Detik</label>
+                    <input
+                      type="number"
+                      min={0}
+                      max={59}
+                      value={timerCustomSec}
+                      onChange={(e) => setTimerCustomSec(Math.max(0, Math.min(59, Number(e.target.value))))}
+                      className="mt-1 w-16 sm:w-20 rounded-xl border border-slate-200 p-1.5 sm:p-2 text-center font-mono text-sm font-bold focus:border-[#0b1f4b] focus:outline-none"
+                    />
+                  </div>
+                  <button
+                    onClick={() => {
+                      const totalSec = timerCustomMin * 60 + timerCustomSec;
+                      if (totalSec > 0) {
+                        handleTimerControl('set', { duration: totalSec });
+                      }
+                    }}
+                    className="rounded-xl bg-[#0b1f4b] px-4 py-2 text-xs font-bold text-white shadow-sm hover:bg-[#142c63]"
+                  >
+                    Terapkan Waktu Kustom
+                  </button>
+                </div>
+              </div>
+
+              {/* SECTION: ATUR JUDUL SESI & PEMBICARA */}
+              <div className="grid gap-3 sm:grid-cols-2 sm:gap-4">
+                {/* Sesi Title */}
+                <div className="rounded-2xl border border-slate-200 bg-white p-4 sm:p-5 shadow-xs">
+                  <h3 className="font-serif text-sm sm:text-base font-bold text-[#0b1f4b]">2. Judul Sesi / Kategori</h3>
+                  <p className="text-xs text-slate-500">Teks ini tampil di atas angka timer layar panggung.</p>
+
+                  <div className="mt-3 flex gap-2">
+                    <input
+                      type="text"
+                      value={timerTitleInput}
+                      onChange={(e) => setTimerTitleInput(e.target.value)}
+                      placeholder="Contoh: Sesi 1 - Penyampaian Visi Misi"
+                      className="w-full rounded-xl border border-slate-200 px-3 py-2 text-xs font-semibold focus:border-[#0b1f4b] focus:outline-none"
+                    />
+                    <button
+                      onClick={() => handleTimerControl('set', { title: timerTitleInput })}
+                      className="shrink-0 rounded-xl bg-[#0b1f4b] px-3.5 py-2 text-xs font-bold text-white shadow-sm hover:bg-[#142c63]"
+                    >
+                      Ubah
+                    </button>
+                  </div>
+
+                  {/* Preset Titles */}
+                  <div className="mt-2.5 flex flex-wrap gap-1.5">
+                    {[
+                      'Sesi 1: Visi & Misi',
+                      'Sesi 2: Tanya Jawab Panelis',
+                      'Sesi 3: Debat Terbuka Antar Paslon',
+                      'Sesi 4: Closing Statement',
+                    ].map((title) => (
+                      <button
+                        key={title}
+                        onClick={() => {
+                          setTimerTitleInput(title);
+                          handleTimerControl('set', { title });
+                        }}
+                        className="rounded-lg border border-slate-200 bg-slate-50 px-2 py-1 text-[10px] sm:text-[11px] font-semibold text-slate-700 hover:bg-slate-100"
+                      >
+                        {title}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Speaker Selector */}
+                <div className="rounded-2xl border border-slate-200 bg-white p-4 sm:p-5 shadow-xs">
+                  <h3 className="font-serif text-sm sm:text-base font-bold text-[#0b1f4b]">3. Sorot Pembicara Aktif</h3>
+                  <p className="text-xs text-slate-500">Tampilkan giliran kandidat yang sedang berbicara di panggung.</p>
+
+                  <div className="mt-3 grid grid-cols-2 gap-2">
+                    <button
+                      onClick={() => handleTimerControl('set', { speaker: 'all' })}
+                      className={`rounded-xl border p-2 text-xs font-bold transition-all ${
+                        timerState.speaker === 'all'
+                          ? 'border-[#0b1f4b] bg-[#0b1f4b] text-white'
+                          : 'border-slate-200 bg-slate-50 text-slate-700 hover:bg-white'
+                      }`}
+                    >
+                      ⚖️ Semua / Netral
+                    </button>
+
+                    <button
+                      onClick={() => handleTimerControl('set', { speaker: 'mod' })}
+                      className={`rounded-xl border p-2 text-xs font-bold transition-all ${
+                        timerState.speaker === 'mod'
+                          ? 'border-[#b0892f] bg-[#fbf6ea] text-[#0b1f4b] ring-2 ring-[#c9a64a]'
+                          : 'border-slate-200 bg-slate-50 text-slate-700 hover:bg-white'
+                      }`}
+                    >
+                      🎙️ Moderator
+                    </button>
+
+                    {pairs.map((p) => (
+                      <button
+                        key={p.number}
+                        onClick={() => handleTimerControl('set', { speaker: `paslon-${p.number}` })}
+                        className={`rounded-xl border p-2 text-xs font-bold transition-all ${
+                          timerState.speaker === `paslon-${p.number}`
+                            ? 'border-[#0b1f4b] bg-[#0b1f4b] text-white shadow-sm'
+                            : 'border-slate-200 bg-slate-50 text-slate-700 hover:bg-white'
+                        }`}
+                      >
+                        Paslon {p.number}: {p.chair_name}
+                      </button>
+                    ))}
+                  </div>
                 </div>
               </div>
             </div>
