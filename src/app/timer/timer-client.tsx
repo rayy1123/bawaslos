@@ -16,12 +16,11 @@ export default function TimerClient({ pairs, settings, initialTimer }: Props) {
   const [timeLeft, setTimeLeft] = useState<number>(initialTimer.remaining);
   const [soundEnabled, setSoundEnabled] = useState<boolean>(true);
   const [isFullscreen, setIsFullscreen] = useState<boolean>(false);
-  const [themeMode, setThemeMode] = useState<'dark' | 'light'>('dark');
 
   const containerRef = useRef<HTMLDivElement>(null);
   const prevTimeRef = useRef<number>(initialTimer.remaining);
 
-  // Web Audio Synthesizer Beep (100% browser native, zero audio file dependencies)
+  // Web Audio Synthesizer Beep (100% native, zero dependencies)
   function playBeep(freq = 880, duration = 0.15, type: OscillatorType = 'sine') {
     if (!soundEnabled) return;
     try {
@@ -39,11 +38,11 @@ export default function TimerClient({ pairs, settings, initialTimer }: Props) {
       osc.start();
       osc.stop(ctx.currentTime + duration);
     } catch {
-      // Audio context might be restricted before user interaction
+      // Audio context might be restricted before user gesture
     }
   }
 
-  // Play finish celebratory/alarm sequence
+  // Play celebratory/alert finish chime
   function playFinishChime() {
     if (!soundEnabled) return;
     try {
@@ -124,13 +123,16 @@ export default function TimerClient({ pairs, settings, initialTimer }: Props) {
     return () => document.removeEventListener('fullscreenchange', onFullscreenChange);
   }, []);
 
-  // Keyboard shortcut listener (F for fullscreen)
+  // Keyboard shortcut listener (F: Fullscreen, M: Mute/Unmute)
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
       if (['INPUT', 'TEXTAREA'].includes((e.target as HTMLElement)?.tagName)) return;
       if (e.code === 'KeyF') {
         e.preventDefault();
         toggleFullscreen();
+      } else if (e.code === 'KeyM') {
+        e.preventDefault();
+        setSoundEnabled((prev) => !prev);
       }
     }
     window.addEventListener('keydown', handleKeyDown);
@@ -163,18 +165,13 @@ export default function TimerClient({ pairs, settings, initialTimer }: Props) {
   const isCritical = timeLeft > 0 && timeLeft <= 10;
   const isWarning = timeLeft > 10 && timeLeft <= 30;
 
-  // Theme-aware styles
-  const isDark = themeMode === 'dark' || isFullscreen;
-
   const timeColorClass = isFinished
     ? 'text-red-500 animate-timer-pulse'
     : isCritical
     ? 'text-red-500 animate-timer-pulse'
     : isWarning
     ? 'text-amber-400'
-    : isDark
-    ? 'text-[#f6f3ec]'
-    : 'text-[#0b1f4b]';
+    : 'text-[#f6f3ec]';
 
   const progressBgClass = isFinished || isCritical
     ? 'bg-red-500 shadow-[0_0_15px_rgba(239,68,68,0.7)]'
@@ -182,163 +179,111 @@ export default function TimerClient({ pairs, settings, initialTimer }: Props) {
     ? 'bg-amber-400 shadow-[0_0_15px_rgba(251,191,36,0.6)]'
     : 'bg-[#c9a64a] shadow-[0_0_12px_rgba(201,166,74,0.5)]';
 
-  // Active speaker details
+  // Active speaker details (only shown if a specific candidate / moderator is selected)
   const activeSpeakerKey = timerState.speaker;
   const activePair = pairs.find((p) => `paslon-${p.number}` === activeSpeakerKey);
 
   return (
     <div
       ref={containerRef}
-      className={`min-h-screen select-none transition-colors duration-500 ${
-        isDark
-          ? 'bg-gradient-to-b from-[#050e1f] via-[#07142d] to-[#040915] text-white'
-          : 'bg-[#f7f6f1] text-slate-800'
-      } flex flex-col justify-between p-4 sm:p-8`}
+      onDoubleClick={toggleFullscreen}
+      className="min-h-screen select-none bg-gradient-to-b from-[#050e1f] via-[#07142d] to-[#040915] text-white flex flex-col justify-between p-4 sm:p-8 transition-colors duration-500"
     >
-      {/* 1. TOP HEADER: Animated MPK Logo + Synchronized Title */}
-      <header className="flex flex-col items-center justify-between gap-4 border-b pb-4 sm:flex-row sm:pb-6 border-white/10">
-        {/* Animated MPK Seal Logo */}
-        <div className="flex items-center gap-4">
+      {/* 1. TOP HEADER: Animated MPK Logo + Clean Session Title */}
+      <header className="flex items-center justify-between pb-2">
+        <div className="flex items-center gap-3.5 sm:gap-4">
           <MpkLogo
             src={settings.logo_url}
-            className="h-16 w-16 sm:h-20 sm:w-20"
+            className="h-14 w-14 sm:h-18 sm:w-18"
             showText={false}
             animated={true}
           />
           <div>
-            <div className="flex items-center gap-2">
-              <span className="rounded-full bg-[#b0892f]/20 px-3 py-0.5 font-mono text-[10px] sm:text-xs font-black tracking-widest text-[#c9a64a] uppercase border border-[#b0892f]/40">
-                MPK SMKN 64 JAKARTA
-              </span>
-              <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-400">
-                <span className="h-2 w-2 rounded-full bg-emerald-400 animate-ping" />
-                Live Terhubung
-              </span>
-            </div>
-            <h1 className="mt-1 font-serif text-lg sm:text-2xl font-bold tracking-tight text-white drop-shadow-sm">
+            <span className="font-mono text-[10px] sm:text-xs font-bold uppercase tracking-widest text-[#c9a64a]">
+              MPK SMKN 64 JAKARTA
+            </span>
+            <h1 className="font-serif text-base sm:text-xl font-bold tracking-tight text-white drop-shadow-sm">
               {timerState.title || 'Sesi Debat & Tanya Jawab'}
             </h1>
           </div>
         </div>
 
-        {/* Top Control Tools (Sound, Fullscreen, Dark/Light, Home) */}
-        <div className="flex flex-wrap items-center gap-2">
-          {/* Sound Toggle */}
+        {/* Subtle, Unobtrusive Controls (Ghost on hover only - keeping screen distraction-free) */}
+        <div className="flex items-center gap-2 opacity-20 hover:opacity-100 transition-opacity duration-300">
           <button
             onClick={() => {
               setSoundEnabled(!soundEnabled);
               if (!soundEnabled) playBeep(880, 0.1);
             }}
-            className={`rounded-xl px-3 py-1.5 text-xs font-bold transition-all shadow-sm ${
-              soundEnabled
-                ? 'bg-emerald-600 text-white'
-                : 'bg-slate-800 text-slate-400 border border-slate-700'
-            }`}
-            title="Aktifkan / Matikan Bunyi Bel"
+            className="rounded-lg p-1.5 text-xs text-white/80 hover:text-white hover:bg-white/10"
+            title={soundEnabled ? 'Matikan Suara Bel' : 'Nyalakan Suara Bel'}
           >
-            {soundEnabled ? '🔔 Bel Aktif' : '🔕 Bisu'}
+            {soundEnabled ? '🔔' : '🔕'}
           </button>
 
-          {/* Theme Toggle */}
-          {!isFullscreen && (
-            <button
-              onClick={() => setThemeMode(themeMode === 'dark' ? 'light' : 'dark')}
-              className="rounded-xl border border-white/20 bg-white/10 px-3 py-1.5 text-xs font-bold text-white hover:bg-white/20"
-            >
-              {themeMode === 'dark' ? '☀️ Mode Terang' : '🌙 Mode Panggung'}
-            </button>
-          )}
-
-          {/* Fullscreen Button */}
           <button
             onClick={toggleFullscreen}
-            className="rounded-xl bg-[#c9a64a] px-3.5 py-1.5 text-xs font-black text-[#0b1f4b] shadow-md hover:bg-[#d8b55c]"
+            className="rounded-lg p-1.5 text-xs text-white/80 hover:text-white hover:bg-white/10"
             title="Layar Penuh (F)"
           >
-            {isFullscreen ? '↙ Keluar Layar Penuh' : '⛶ Layar Panggung Proyektor'}
+            ⛶
           </button>
 
-          {!isFullscreen && (
-            <Link
-              href="/"
-              className="rounded-xl border border-white/20 bg-white/10 px-3 py-1.5 text-xs font-semibold text-white hover:bg-white/20"
-            >
-              Beranda
-            </Link>
-          )}
+          <Link
+            href="/"
+            className="rounded-lg p-1.5 text-xs text-white/80 hover:text-white hover:bg-white/10"
+            title="Kembali ke Beranda"
+          >
+            ⌂
+          </Link>
         </div>
       </header>
 
-      {/* 2. CENTER: THE SINGLE MASSIVE DISPLAY (SATU TIMER BESAR) */}
-      <main className="my-auto flex flex-col items-center justify-center py-6 sm:py-10 text-center">
-        {/* Dynamic Speaker Badge (Dikendalikan Admin) */}
-        <div className="mb-4 sm:mb-6 animate-fade-up">
+      {/* 2. CENTER: THE CLEAN GIANT TIMER (MENIT : DETIK) */}
+      <main className="my-auto flex flex-col items-center justify-center py-4 text-center">
+        {/* Optional Speaker Indicator (Only appears if a specific Paslon or Moderator is active) */}
+        <div className="min-h-12 flex items-center justify-center">
           {activePair ? (
-            <div className="inline-flex items-center gap-3 rounded-2xl border-2 border-[#b0892f] bg-[#0b1f4b]/90 px-6 py-2.5 shadow-xl backdrop-blur-md">
-              <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-[#c9a64a] font-mono text-sm font-black text-[#0b1f4b]">
+            <div className="inline-flex items-center gap-3 rounded-2xl border-2 border-[#b0892f] bg-[#0b1f4b]/90 px-6 py-2 shadow-xl backdrop-blur-md animate-fade-up">
+              <span className="flex h-7 w-7 items-center justify-center rounded-xl bg-[#c9a64a] font-mono text-xs font-black text-[#0b1f4b]">
                 {activePair.number}
               </span>
-              <div className="text-left">
-                <span className="text-[10px] font-bold uppercase tracking-widest text-[#c9a64a]">
-                  GILIRAN BICARA:
-                </span>
-                <p className="font-serif text-base sm:text-xl font-extrabold text-white">
-                  Paslon {activePair.number}: {activePair.chair_name} &amp; {activePair.vice_name}
-                </p>
-              </div>
+              <p className="font-serif text-sm sm:text-lg font-extrabold text-white">
+                Paslon {activePair.number}: {activePair.chair_name} &amp; {activePair.vice_name}
+              </p>
             </div>
           ) : activeSpeakerKey === 'mod' ? (
-            <div className="inline-flex items-center gap-2.5 rounded-2xl border border-blue-400/30 bg-blue-950/80 px-6 py-2 shadow-lg backdrop-blur-md">
-              <span className="text-xl">🎙️</span>
-              <span className="font-serif text-sm sm:text-lg font-bold text-blue-200">
-                Giliran: Moderator / Panelis Penguji
+            <div className="inline-flex items-center gap-2 rounded-2xl border border-blue-400/30 bg-blue-950/80 px-5 py-1.5 shadow-lg backdrop-blur-md animate-fade-up">
+              <span className="text-base">🎙️</span>
+              <span className="font-serif text-xs sm:text-base font-bold text-blue-200">
+                Moderator / Panelis
               </span>
             </div>
-          ) : (
-            <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-4 py-1 text-xs font-semibold text-slate-300">
-              <span>⚖️ Sesi Bersama / Debat Bebas</span>
-            </div>
-          )}
+          ) : null}
         </div>
 
         {/* GIANT COUNTDOWN DIGITS (MM:SS) */}
-        <div className="relative w-full max-w-5xl">
+        <div className="w-full max-w-5xl my-2">
           <div
-            className={`font-mono font-black tracking-tight leading-none drop-shadow-2xl ${timeColorClass}`}
-            style={{ fontSize: 'clamp(5.5rem, 24vw, 22rem)' }}
+            className={`font-mono font-black tracking-tight leading-none drop-shadow-2xl select-none ${timeColorClass}`}
+            style={{ fontSize: 'clamp(6rem, 27vw, 25rem)' }}
           >
             {formattedTime}
           </div>
 
-          {/* Time's Up Banner */}
-          <div className="mt-4 sm:mt-6 h-10 flex items-center justify-center">
-            {isFinished ? (
+          {/* Time Expired Indicator */}
+          <div className="h-10 mt-2 flex items-center justify-center">
+            {isFinished && (
               <span className="rounded-full bg-red-600 px-6 py-2 text-base sm:text-2xl font-black uppercase tracking-widest text-white shadow-2xl animate-bounce">
                 ⚠️ WAKTU TELAH HABIS! ⚠️
               </span>
-            ) : isCritical ? (
-              <span className="rounded-full bg-red-600/30 border border-red-500/50 px-5 py-1.5 text-xs sm:text-base font-bold text-red-300 animate-pulse">
-                ● Sisa {timeLeft} Detik Terakhir
-              </span>
-            ) : isWarning ? (
-              <span className="rounded-full bg-amber-500/20 border border-amber-400/40 px-5 py-1.5 text-xs sm:text-base font-bold text-amber-300">
-                ● Peringatan: Waktu Kurang Dari 30 Detik
-              </span>
-            ) : !timerState.is_running && timeLeft === duration ? (
-              <span className="text-xs sm:text-sm font-semibold text-slate-400">
-                Menunggu instruksi dari Dashboard Admin…
-              </span>
-            ) : !timerState.is_running ? (
-              <span className="rounded-full bg-white/10 px-4 py-1 text-xs sm:text-sm font-bold text-slate-300">
-                ⏸ Waktu Sedang Dijeda
-              </span>
-            ) : null}
+            )}
           </div>
         </div>
 
-        {/* Horizontal Progress Meter Bar */}
-        <div className="mx-auto mt-6 w-full max-w-3xl px-4">
-          <div className="h-3 sm:h-4 w-full overflow-hidden rounded-full bg-white/10 p-0.5">
+        {/* Minimal Progress Bar Under Timer */}
+        <div className="w-full max-w-2xl px-6">
+          <div className="h-2 sm:h-2.5 w-full overflow-hidden rounded-full bg-white/10 p-0.5">
             <div
               className={`h-full rounded-full transition-all duration-300 ease-linear ${progressBgClass}`}
               style={{ width: `${progressPercent}%` }}
@@ -347,21 +292,8 @@ export default function TimerClient({ pairs, settings, initialTimer }: Props) {
         </div>
       </main>
 
-      {/* 3. BOTTOM FOOTER & SYNC STATUS */}
-      <footer className="flex flex-col items-center justify-between gap-2 border-t pt-4 text-xs border-white/10 sm:flex-row text-slate-400">
-        <div className="flex items-center gap-2">
-          <span>Badan Pengawas Pemilihan OSIS · MPK SMK Negeri 64 Jakarta</span>
-        </div>
-
-        <div className="flex items-center gap-3">
-          <span className="text-[11px] text-slate-400">
-            Dapat diatur langsung dari <Link href="/admin" className="underline hover:text-white font-bold">Dashboard Admin</Link>
-          </span>
-          <span className="hidden sm:inline font-mono text-[10px] text-slate-500">
-            [F: Fullscreen]
-          </span>
-        </div>
-      </footer>
+      {/* 3. BOTTOM: COMPLETELY CLEAN */}
+      <footer className="h-4" />
     </div>
   );
 }
