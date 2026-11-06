@@ -326,6 +326,112 @@ export async function revealedTally(revealedCount: number): Promise<{ pair_id: n
   );
 }
 
+// Rekap akumulasi progres suara per interval (misal per 10 reveal voting)
+export type MilestoneStep = {
+  step: number;
+  upToVoterNo: number;
+  tally: {
+    pair_id: number;
+    number: number;
+    chair_name: string;
+    vice_name: string;
+    votes: number;
+    percent: number;
+  }[];
+  leaderNumber: number | null;
+  leaderNames: string;
+  margin: number;
+};
+
+export async function getMilestoneTally(revealedCount: number, stepInterval = 10): Promise<{
+  milestones: MilestoneStep[];
+  totalRevealed: number;
+  finalTally: {
+    pair_id: number;
+    number: number;
+    chair_name: string;
+    vice_name: string;
+    votes: number;
+    percent: number;
+  }[];
+}> {
+  const db = await ensureDb();
+  const pairs = await listPairs(true);
+  const count = Math.max(0, revealedCount);
+
+  const votesRes = await db.execute({
+    sql: 'SELECT voter_no, pair_id FROM votes WHERE voter_no <= ? ORDER BY voter_no ASC',
+    args: [count],
+  });
+
+  const votes = votesRes.rows as unknown as { voter_no: number; pair_id: number }[];
+
+  // Tentukan titik checkpoint akumulasi (10, 20, 30... hingga batas count)
+  const checkpoints: number[] = [];
+  if (count > 0) {
+    for (let c = stepInterval; c <= count; c += stepInterval) {
+      checkpoints.push(c);
+    }
+    if (count % stepInterval !== 0 || checkpoints.length === 0) {
+      checkpoints.push(count);
+    }
+  }
+
+  const milestones: MilestoneStep[] = [];
+  let stepIndex = 1;
+
+  for (const cp of checkpoints) {
+    const votesUpToCp = votes.filter((v) => Number(v.voter_no) <= cp);
+    const totalAtCp = votesUpToCp.length || 1;
+
+    const tallyAtCp = pairs.map((p) => {
+      const vCount = votesUpToCp.filter((v) => Number(v.pair_id) === Number(p.id)).length;
+      return {
+        pair_id: p.id,
+        number: p.number,
+        chair_name: p.chair_name,
+        vice_name: p.vice_name,
+        votes: vCount,
+        percent: Math.round((vCount / totalAtCp) * 100),
+      };
+    });
+
+    const sorted = [...tallyAtCp].sort((a, b) => b.votes - a.votes);
+    const leader = sorted[0];
+    const second = sorted[1];
+    const margin = leader && second ? leader.votes - second.votes : 0;
+    const isTie = leader && second && leader.votes === second.votes;
+
+    milestones.push({
+      step: stepIndex++,
+      upToVoterNo: cp,
+      tally: tallyAtCp,
+      leaderNumber: isTie ? null : leader?.number ?? null,
+      leaderNames: isTie ? 'Imbang (Seri)' : `${leader?.chair_name} & ${leader?.vice_name}`,
+      margin,
+    });
+  }
+
+  const totalVotesNow = votes.length || 1;
+  const finalTally = pairs.map((p) => {
+    const vCount = votes.filter((v) => Number(v.pair_id) === Number(p.id)).length;
+    return {
+      pair_id: p.id,
+      number: p.number,
+      chair_name: p.chair_name,
+      vice_name: p.vice_name,
+      votes: vCount,
+      percent: Math.round((vCount / totalVotesNow) * 100),
+    };
+  });
+
+  return {
+    milestones,
+    totalRevealed: count,
+    finalTally,
+  };
+}
+
 // Seluruh suara berurutan (untuk audit internal / verifikasi admin).
 export async function voteTimeline(): Promise<VoteRow[]> {
   const db = await ensureDb();

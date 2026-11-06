@@ -21,7 +21,7 @@ body {
   margin: 0;
   background: var(--paper);
   color: var(--ink);
-  font-family: var(--font-inter), system-ui, -apple-system, 'Segoe UI', sans-serif;
+  font-family: var(--font-heading), var(--font-inter), system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
 }
@@ -30,13 +30,20 @@ body {
   box-sizing: border-box;
 }
 
-/* Typography editorial */
-.font-serif {
-  font-family: var(--font-playfair), Georgia, 'Times New Roman', serif;
+/* Typography modern, elegan, dan mudah dibaca (Plus Jakarta Sans / Inter) */
+.font-serif,
+.font-heading {
+  font-family: var(--font-heading), var(--font-inter), system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  letter-spacing: -0.012em;
 }
 .font-mono-num {
   font-family: var(--font-mono), ui-monospace, monospace;
   font-variant-numeric: tabular-nums;
+}
+
+/* Font formal khusus cetak dokumen dinas / surat keputusan */
+.font-formal-doc {
+  font-family: 'Times New Roman', Times, Georgia, serif;
 }
 
 /* Official label: small-caps, extended tracking */

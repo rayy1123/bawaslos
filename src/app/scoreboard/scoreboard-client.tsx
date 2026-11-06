@@ -108,8 +108,8 @@ export default function ScoreboardClient({ initialTally, total, revealedInit }: 
       {/* Judul + Total Suara */}
       <div className="text-center mb-14 z-10 relative w-full">
         <p className="label-official mb-2">Rekapitulasi Suara · Pemilihan OSIS</p>
-        <h1 className="font-serif text-4xl sm:text-5xl font-bold text-[#1B2E4B] tracking-tight">
-          WHO WILL WIN?
+        <h1 className="font-serif text-4xl sm:text-5xl font-extrabold text-[#1B2E4B] tracking-tight uppercase">
+          WHO WILL LEAD US?
         </h1>
         <div className="mt-6 inline-flex flex-col items-center bg-[#1B2E4B] p-6 rounded-2xl shadow-xl border border-[#C5A059]/30 relative overflow-hidden">
           <div className="absolute inset-0 bg-[#C5A059]/10 blur-xl" />

@@ -1,5 +1,5 @@
 import type { Metadata } from 'next';
-import { Inter, Playfair_Display, JetBrains_Mono } from 'next/font/google';
+import { Inter, Plus_Jakarta_Sans, JetBrains_Mono } from 'next/font/google';
 import './globals.css';
 
 const inter = Inter({
@@ -9,10 +9,10 @@ const inter = Inter({
   display: 'swap',
 });
 
-const playfair = Playfair_Display({
+const plusJakarta = Plus_Jakarta_Sans({
   subsets: ['latin'],
-  weight: ['600', '700', '800'],
-  variable: '--font-playfair',
+  weight: ['500', '600', '700', '800'],
+  variable: '--font-heading',
   display: 'swap',
 });
 
@@ -31,7 +31,7 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="id" className={`${inter.variable} ${playfair.variable} ${jetbrains.variable}`}>
+    <html lang="id" className={`${inter.variable} ${plusJakarta.variable} ${jetbrains.variable}`}>
       <body className="min-h-screen antialiased">{children}</body>
     </html>
   );

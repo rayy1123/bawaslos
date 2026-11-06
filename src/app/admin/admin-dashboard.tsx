@@ -1679,8 +1679,15 @@ export default function AdminDashboard({
 
                 {/* Export Options */}
                 <div className="mt-5 flex flex-wrap items-center justify-between gap-2.5 border-t border-[#0b1f4b]/10 pt-4">
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-xs font-bold text-slate-600">Ekspor:</span>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-xs font-bold text-slate-600">Dokumen &amp; Ekspor:</span>
+                    <Link
+                      href="/admin/surat-hasil"
+                      target="_blank"
+                      className="inline-flex items-center gap-1.5 rounded-lg bg-[#0b1f4b] px-3.5 py-1.5 text-xs font-bold text-white shadow-sm hover:bg-[#142c63]"
+                    >
+                      📄 Cetak Surat Berita Acara &amp; Hasil (PDF)
+                    </Link>
                     <a
                       href="/api/export?format=csv"
                       className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-[#0b1f4b] shadow-sm hover:bg-slate-50"
