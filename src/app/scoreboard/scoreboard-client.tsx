@@ -132,20 +132,26 @@ export default function ScoreboardClient({ initialTally, total, revealedInit }: 
           return (
             <div
               key={row.pair_id}
-              className="flex flex-col items-center w-full bg-white rounded-3xl p-8 shadow-[0_8px_30px_rgb(3,25,53,0.08)] border border-[#e1e3e4] relative overflow-hidden group"
+              className="flex flex-col items-center w-full bg-white rounded-2xl p-6 sm:p-8 shadow-md border border-slate-200 relative overflow-hidden"
             >
-              <div className="absolute top-0 left-0 w-full h-2" style={{ background: accent }} />
-              {/* Foto bulat */}
-              <div className="w-44 h-44 rounded-full overflow-hidden border-4 border-[#f8f9fa] shadow-inner mb-5 relative bg-[#1B2E4B]/5">
+              <div className="absolute top-0 left-0 w-full h-2.5" style={{ background: accent }} />
+              {/* Foto Kotak (Square Frame) - Bersih Tanpa Bayangan / Shadow Overlay */}
+              <div className="w-52 h-52 sm:w-60 sm:h-60 rounded-2xl overflow-hidden border-2 border-slate-200 mb-5 relative bg-white flex items-center justify-center shadow-xs">
                 {row.photo_url ? (
                   // eslint-disable-next-line @next/next/no-img-element
-                  <img className="w-full h-full object-cover" src={row.photo_url} alt={`Paslon ${row.number}`} />
+                  <img
+                    className="w-full h-full object-cover object-center"
+                    src={row.photo_url}
+                    alt={`Paslon ${row.number}`}
+                  />
                 ) : (
-                  <div className="w-full h-full flex items-center justify-center text-3xl font-bold text-[#1B2E4B]/40 font-serif">
+                  <div className="w-full h-full flex items-center justify-center text-4xl font-extrabold text-[#1B2E4B]/30 font-serif">
                     {row.chair_name?.[0] ?? '?'}
                   </div>
                 )}
-                <div className="absolute inset-0 bg-[#1B2E4B]/0 group-hover:bg-[#1B2E4B]/10 transition-colors" />
+                <div className="absolute top-2.5 left-2.5 rounded-lg bg-[#0b1f4b] px-2.5 py-1 text-xs font-mono font-extrabold text-[#c9a64a] shadow-sm">
+                  NO. {String(row.number).padStart(2, '0')}
+                </div>
               </div>
               <h2 className="font-serif text-2xl font-bold text-[#1B2E4B] text-center">Paslon {String(row.number).padStart(2, '0')}</h2>
               <p className="text-base text-[#44474d] text-center mb-6">
