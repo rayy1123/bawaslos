@@ -15,6 +15,7 @@ import {
   setAccountToken,
   upsertPair,
   deletePair,
+  deletePairByNumber,
   upsertNews,
   deleteNews,
   getNews,
@@ -29,6 +30,9 @@ import {
   resetAllVoters,
   getTimerState,
   setTimerState,
+  getDisplayState,
+  setDisplayState,
+  type DisplayMode,
 } from './queries';
 import { hashPassword, makeSalt } from './auth';
 import { ensureDb } from './db';
@@ -95,11 +99,11 @@ export async function resetAllTokensAction() {
 export async function savePairAction(formData: FormData) {
   if (!(await isAdmin())) return { ok: false, error: 'Tidak berwenang.' };
   const number = Number(formData.get('number'));
-  if (![1, 2, 3].includes(number)) return { ok: false, error: 'Nomor pasangan harus 1-3.' };
+  if (!number || number < 1) return { ok: false, error: 'Nomor pasangan harus valid.' };
   let photo = String(formData.get('photo_url') || '').trim();
-  // Batasi ukuran foto (data-URL) agar DB tidak membengkak: maks ~1.5 MB.
-  if (photo && photo.startsWith('data:') && photo.length > 1_500_000) {
-    return { ok: false, error: 'Foto terlalu besar (maks 1.5 MB).' };
+  // Batasi ukuran foto (data-URL): maks ~2.5 MB
+  if (photo && photo.startsWith('data:') && photo.length > 2_500_000) {
+    return { ok: false, error: 'Foto terlalu besar (maks 2 MB).' };
   }
   await upsertPair({
     number,
@@ -109,18 +113,20 @@ export async function savePairAction(formData: FormData) {
     photo_url: photo,
     active: formData.get('active') === 'on' ? 1 : 0,
   });
-  revalidatePath('/');
-  revalidatePath('/admin');
-  revalidatePath('/scoreboard');
+  revalidatePath('/', 'layout');
   return { ok: true };
 }
 
 export async function deletePairAction(formData: FormData) {
   if (!(await isAdmin())) return { ok: false, error: 'Tidak berwenang.' };
-  await deletePair(Number(formData.get('id')));
-  revalidatePath('/');
-  revalidatePath('/admin');
-  revalidatePath('/scoreboard');
+  const id = Number(formData.get('id'));
+  const number = Number(formData.get('number'));
+  if (id) {
+    await deletePair(id);
+  } else if (number) {
+    await deletePairByNumber(number);
+  }
+  revalidatePath('/', 'layout');
   return { ok: true };
 }
 
@@ -334,5 +340,23 @@ export async function controlTimerAction(data: {
   if (!(await isAdmin())) return { ok: false, error: 'Tidak berwenang.' };
   const res = await setTimerState(data);
   revalidatePath('/timer');
+  revalidatePath('/panggung');
+  return { ok: true, state: res };
+}
+
+// ---------- KONTROL LAYAR PANGGUNG PROYEKTOR / TV (ADMIN) ----------
+export async function getDisplayAction() {
+  return await getDisplayState();
+}
+
+export async function setDisplayModeAction(data: {
+  mode: DisplayMode;
+  video_sound?: boolean;
+}) {
+  if (!(await isAdmin())) return { ok: false, error: 'Tidak berwenang.' };
+  const res = await setDisplayState(data);
+  revalidatePath('/panggung');
+  revalidatePath('/banner');
+  revalidatePath('/admin');
   return { ok: true, state: res };
 }

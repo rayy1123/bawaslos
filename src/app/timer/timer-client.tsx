@@ -191,18 +191,18 @@ export default function TimerClient({ pairs, settings, initialTimer }: Props) {
     >
       {/* 1. TOP HEADER: Animated MPK Logo + Clean Session Title */}
       <header className="flex items-center justify-between pb-2">
-        <div className="flex items-center gap-3.5 sm:gap-4">
+        <div className="flex items-center gap-4 sm:gap-5">
           <MpkLogo
             src={settings.logo_url}
-            className="h-14 w-14 sm:h-18 sm:w-18"
+            className="h-16 w-16 sm:h-20 sm:w-20 md:h-24 md:w-24"
             showText={false}
             animated={true}
           />
           <div>
-            <span className="font-mono text-[10px] sm:text-xs font-bold uppercase tracking-widest text-[#c9a64a]">
+            <span className="font-mono text-xs sm:text-sm md:text-base font-bold uppercase tracking-widest text-[#c9a64a]">
               MPK SMKN 64 JAKARTA
             </span>
-            <h1 className="font-serif text-base sm:text-xl font-bold tracking-tight text-white drop-shadow-sm">
+            <h1 className="font-serif text-xl sm:text-3xl md:text-4xl font-extrabold tracking-tight text-white drop-shadow-md">
               {timerState.title || 'Sesi Debat & Tanya Jawab'}
             </h1>
           </div>

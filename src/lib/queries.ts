@@ -163,7 +163,16 @@ export async function upsertPair(p: Partial<Pair> & { number: number }): Promise
 
 export async function deletePair(id: number): Promise<void> {
   const db = await ensureDb();
+  await db.execute({ sql: 'DELETE FROM votes WHERE pair_id = ?', args: [id] });
   await db.execute({ sql: 'DELETE FROM pairs WHERE id = ?', args: [id] });
+}
+
+export async function deletePairByNumber(number: number): Promise<void> {
+  const db = await ensureDb();
+  const pair = await db.execute({ sql: 'SELECT id FROM pairs WHERE number = ?', args: [number] });
+  if (pair.rows[0]) {
+    await deletePair(Number(pair.rows[0].id));
+  }
 }
 
 // ---------- NEWS ----------
@@ -715,5 +724,60 @@ export async function setTimerState(data: {
     is_running: is_running && remaining > 0,
     target_end,
     server_now: now,
+  };
+}
+
+// ---------- KONTROL TAMPILAN LAYAR PANGGUNG / PROYEKTOR ----------
+export type DisplayMode = 'banner' | 'scoreboard' | 'timer';
+
+export type DisplayState = {
+  mode: DisplayMode;
+  video_sound: boolean;
+  updated_at: string;
+};
+
+export async function getDisplayState(): Promise<DisplayState> {
+  const db = await ensureDb();
+  const res = await db.execute('SELECT * FROM display_state WHERE id = 1');
+  const row = res.rows[0];
+  if (!row) {
+    return {
+      mode: 'banner',
+      video_sound: false,
+      updated_at: new Date().toISOString(),
+    };
+  }
+  return {
+    mode: (['banner', 'scoreboard', 'timer'].includes(String(row.mode))
+      ? String(row.mode)
+      : 'banner') as DisplayMode,
+    video_sound: Boolean(row.video_sound),
+    updated_at: String(row.updated_at || ''),
+  };
+}
+
+export async function setDisplayState(data: {
+  mode?: DisplayMode;
+  video_sound?: boolean;
+}): Promise<DisplayState> {
+  const db = await ensureDb();
+  const cur = await getDisplayState();
+
+  const nextMode = data.mode ?? cur.mode;
+  const nextSound = data.video_sound !== undefined ? data.video_sound : cur.video_sound;
+
+  await db.execute({
+    sql: `UPDATE display_state SET
+      mode = ?,
+      video_sound = ?,
+      updated_at = datetime('now')
+      WHERE id = 1`,
+    args: [nextMode, nextSound ? 1 : 0],
+  });
+
+  return {
+    mode: nextMode,
+    video_sound: nextSound,
+    updated_at: new Date().toISOString(),
   };
 }

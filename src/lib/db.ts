@@ -130,6 +130,14 @@ const SCHEMA_SQL = `
     target_end  INTEGER NOT NULL DEFAULT 0,
     updated_at  TEXT NOT NULL DEFAULT (datetime('now'))
   );
+
+  -- State tampilan layar panggung / proyektor (banner / scoreboard / timer).
+  CREATE TABLE IF NOT EXISTS display_state (
+    id          INTEGER PRIMARY KEY CHECK (id = 1),
+    mode        TEXT NOT NULL DEFAULT 'banner', -- 'banner' | 'scoreboard' | 'timer'
+    video_sound INTEGER NOT NULL DEFAULT 0,     -- 0 = mute, 1 = bersuara
+    updated_at  TEXT NOT NULL DEFAULT (datetime('now'))
+  );
 `;
 
 async function seed(db: Client) {
@@ -200,10 +208,6 @@ async function seed(db: Client) {
       await db.execute({
         sql: 'INSERT INTO pairs (number, chair_name, vice_name, vision, photo_url, active) VALUES (?, ?, ?, ?, ?, ?)',
         args: [2, 'Citra', 'Dewi', 'Membangun lingkungan sekolah yang aktif dan kreatif melalui program kerja nyata untuk seluruh siswa.', '/paslon-2.jpg', 1],
-      });
-      await db.execute({
-        sql: 'INSERT INTO pairs (number, chair_name, vice_name, vision, photo_url, active) VALUES (?, ?, ?, ?, ?, ?)',
-        args: [3, 'Eka', 'Fajar', 'Menjadikan OSIS wadah aspirasi yang transparan, komunikatif, dan responsif terhadap kebutuhan siswa.', '/paslon-3.jpg', 1],
       });
     }
   } catch (e) {
@@ -285,6 +289,30 @@ async function migrate(db: Client) {
         VALUES (1, 'Sesi Debat & Tanya Jawab', 'all', 120, 120, 0, 0)
       `);
     }
+  } catch {}
+
+  try {
+    await db.execute(`
+      CREATE TABLE IF NOT EXISTS display_state (
+        id          INTEGER PRIMARY KEY CHECK (id = 1),
+        mode        TEXT NOT NULL DEFAULT 'banner',
+        video_sound INTEGER NOT NULL DEFAULT 0,
+        updated_at  TEXT NOT NULL DEFAULT (datetime('now'))
+      )
+    `);
+    const countDisplay = await db.execute('SELECT COUNT(*) AS c FROM display_state');
+    if (Number(countDisplay.rows[0]?.c ?? 0) === 0) {
+      await db.execute(`
+        INSERT INTO display_state (id, mode, video_sound)
+        VALUES (1, 'banner', 0)
+      `);
+    }
+  } catch {}
+
+  // Pastikan Paslon 3 terhapus bersih dari database
+  try {
+    await db.execute('DELETE FROM votes WHERE pair_id IN (SELECT id FROM pairs WHERE number = 3)');
+    await db.execute('DELETE FROM pairs WHERE number = 3');
   } catch {}
 }
 

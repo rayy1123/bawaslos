@@ -196,7 +196,7 @@ export default function VoteClient({ pairs, accounts, voterAccount, logoUrl, org
               Pilihan Anda bersifat rahasia dan final.
             </p>
 
-            <div className="mt-8 grid gap-5 sm:grid-cols-3">
+            <div className={`mt-8 grid gap-5 ${pairs.length === 2 ? 'max-w-3xl mx-auto sm:grid-cols-2' : 'sm:grid-cols-3'}`}>
               {pairs.map((p) => (
                 <div key={p.id} className="pair-card flex flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-md">
                   <div className="relative">

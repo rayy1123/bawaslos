@@ -22,8 +22,9 @@ import {
   generateVotersAction,
   resetVotersAction,
   controlTimerAction,
+  setDisplayModeAction,
 } from '@/lib/actions';
-import type { Pair, NewsItem, Account, VoterRecord, TimerState } from '@/lib/queries';
+import type { Pair, NewsItem, Account, VoterRecord, TimerState, DisplayState, DisplayMode } from '@/lib/queries';
 import LogoSeal from '@/components/LogoSeal';
 
 function readFileAsDataURL(file: File): Promise<string> {
@@ -31,6 +32,42 @@ function readFileAsDataURL(file: File): Promise<string> {
     const reader = new FileReader();
     reader.onload = () => resolve(reader.result as string);
     reader.onerror = () => reject(reader.error);
+    reader.readAsDataURL(file);
+  });
+}
+
+function compressImageFile(file: File, maxWidth = 1200, maxHeight = 1200, quality = 0.85): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onload = () => {
+        let width = img.width;
+        let height = img.height;
+        if (width > maxWidth || height > maxHeight) {
+          if (width / height > maxWidth / maxHeight) {
+            height = Math.round((height * maxWidth) / width);
+            width = maxWidth;
+          } else {
+            width = Math.round((width * maxHeight) / height);
+            height = maxHeight;
+          }
+        }
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+          resolve(e.target?.result as string);
+          return;
+        }
+        ctx.drawImage(img, 0, 0, width, height);
+        resolve(canvas.toDataURL('image/jpeg', quality));
+      };
+      img.onerror = reject;
+      img.src = e.target?.result as string;
+    };
+    reader.onerror = reject;
     reader.readAsDataURL(file);
   });
 }
@@ -49,6 +86,7 @@ type Props = {
   rules: { headline: string; body: string };
   settings: { org_name: string; org_subtitle: string; logo_url: string; mascot_url: string };
   timer?: TimerState;
+  display?: DisplayState;
 };
 
 export default function AdminDashboard({
@@ -65,11 +103,12 @@ export default function AdminDashboard({
   rules,
   settings,
   timer,
+  display,
 }: Props) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
 
-  const [active, setActive] = useState<'overview' | 'timer' | 'tokens' | 'scoreboard' | 'pairs' | 'news' | 'panduan' | 'audit' | 'settings'>('overview');
+  const [active, setActive] = useState<'overview' | 'panggung' | 'timer' | 'tokens' | 'scoreboard' | 'pairs' | 'news' | 'panduan' | 'audit' | 'settings'>('overview');
   const [tokenModal, setTokenModal] = useState<{ accountId: number; token: string } | null>(null);
   const [copiedToken, setCopiedToken] = useState<string | null>(null);
 
@@ -93,6 +132,11 @@ export default function AdminDashboard({
   const [votingOpenDraft, setVotingOpenDraft] = useState(votingOpen);
   const [scoreboardPubDraft, setScoreboardPubDraft] = useState(scoreboard.published);
 
+  // Live Stage Display State (Banner / Scoreboard / Timer)
+  const [displayMode, setDisplayMode] = useState<DisplayMode>(display?.mode || 'banner');
+  const [displaySound, setDisplaySound] = useState<boolean>(display?.video_sound || false);
+  const [displayBusy, setDisplayBusy] = useState<boolean>(false);
+
   const [photoDrafts, setPhotoDrafts] = useState<Record<number, string>>({});
   const [logoDraft, setLogoDraft] = useState('');
   const [mascotDraft, setMascotDraft] = useState('');
@@ -104,6 +148,10 @@ export default function AdminDashboard({
     body: '',
     cover_url: '',
   });
+
+  const [showAddPair, setShowAddPair] = useState(false);
+  const [addPairNumber, setAddPairNumber] = useState(3);
+  const [addPhotoDraft, setAddPhotoDraft] = useState('');
 
   const [genFrom, setGenFrom] = useState(1);
   const [genTo, setGenTo] = useState(300);
@@ -158,6 +206,45 @@ export default function AdminDashboard({
       clearInterval(interval);
     };
   }, []);
+
+  // 1b. Polling sync with stage display state
+  useEffect(() => {
+    let isSubscribed = true;
+    async function syncDisplay() {
+      try {
+        const res = await fetch('/api/display', { cache: 'no-store' });
+        if (res.ok && isSubscribed) {
+          const data: DisplayState = await res.json();
+          setDisplayMode(data.mode);
+          setDisplaySound(data.video_sound);
+        }
+      } catch {}
+    }
+    const interval = setInterval(syncDisplay, 1500);
+    return () => {
+      isSubscribed = false;
+      clearInterval(interval);
+    };
+  }, []);
+
+  async function handleSetDisplayMode(newMode: DisplayMode, sound = displaySound) {
+    setDisplayBusy(true);
+    setDisplayMode(newMode);
+    const res = await setDisplayModeAction({ mode: newMode, video_sound: sound });
+    setDisplayBusy(false);
+    if (res.ok) {
+      notify(`Layar panggung dialihkan ke: ${newMode.toUpperCase()}`);
+    } else {
+      notify(res.error || 'Gagal mengubah layar panggung.', 'error');
+    }
+  }
+
+  async function handleToggleDisplaySound() {
+    const nextSound = !displaySound;
+    setDisplaySound(nextSound);
+    await setDisplayModeAction({ mode: displayMode, video_sound: nextSound });
+    notify(nextSound ? 'Audio video banner diaktifkan.' : 'Audio video banner dimatikan.');
+  }
 
   // 2. High-precision local countdown ticker
   useEffect(() => {
@@ -492,7 +579,8 @@ export default function AdminDashboard({
         <nav className="mt-4 sm:mt-6 flex gap-1.5 overflow-x-auto pb-1 pt-0.5 no-scrollbar scroll-smooth">
           {[
             { id: 'overview', label: 'Ringkasan', icon: '⚡' },
-            { id: 'timer', label: 'Timer Panggung', icon: '⏱️', badge: timerState.is_running ? '● Live' : undefined },
+            { id: 'panggung', label: 'Kendali Panggung', icon: '🎬', badge: displayMode === 'banner' ? 'Banner' : displayMode === 'scoreboard' ? 'Scoreboard' : 'Timer' },
+            { id: 'timer', label: 'Timer Debat', icon: '⏱️', badge: timerState.is_running ? '● Live' : undefined },
             { id: 'tokens', label: 'DPT & Token', icon: '🎟️', count: voters.length },
             { id: 'scoreboard', label: 'Scoreboard', icon: '🏆', badge: `${scoreboard.revealed}/${scoreboard.total}` },
             { id: 'pairs', label: 'Paslon', icon: '👥', count: pairs.length },
@@ -547,6 +635,80 @@ export default function AdminDashboard({
                 <p className="mt-0.5 text-xs text-slate-500">
                   Status perangkat bilik suara fisik dan jalan pintas pengawasan.
                 </p>
+              </div>
+
+              {/* KENDALI LAYAR PANGGUNG (PROYEKTOR / TV) */}
+              <div className="rounded-2xl border-2 border-[#b0892f] bg-gradient-to-r from-[#0b1f4b] via-[#112a5e] to-[#07132a] p-4 sm:p-5 text-white shadow-xl">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="rounded-full bg-[#c9a64a] px-2.5 py-0.5 font-mono text-[10px] font-black uppercase text-[#0b1f4b]">
+                        KENDALI LAYAR PANGGUNG
+                      </span>
+                      <span className="text-xs text-slate-300">
+                        Mode Aktif: <b className="text-[#c9a64a] uppercase">{displayMode}</b>
+                      </span>
+                    </div>
+                    <h3 className="mt-1 font-serif text-base sm:text-lg font-bold">
+                      Ganti Tampilan Layar Proyektor / TV Panggung
+                    </h3>
+                    <p className="text-[11px] sm:text-xs text-slate-300">
+                      Buka link{' '}
+                      <Link href="/panggung" target="_blank" className="font-bold underline text-[#c9a64a]">
+                        /panggung
+                      </Link>{' '}
+                      di laptop proyektor panggung (tekan F untuk Fullscreen).
+                    </p>
+                  </div>
+
+                  {/* Remote Switcher Buttons */}
+                  <div className="flex flex-wrap items-center gap-2">
+                    <button
+                      disabled={displayBusy}
+                      onClick={() => handleSetDisplayMode('banner')}
+                      className={`inline-flex items-center gap-1.5 rounded-xl px-4 py-2 text-xs font-black transition-all ${
+                        displayMode === 'banner'
+                          ? 'bg-[#c9a64a] text-[#0b1f4b] shadow-lg ring-2 ring-white scale-102'
+                          : 'bg-white/10 text-white hover:bg-white/20'
+                      }`}
+                    >
+                      🎬 Video Banner
+                    </button>
+
+                    <button
+                      disabled={displayBusy}
+                      onClick={() => handleSetDisplayMode('scoreboard')}
+                      className={`inline-flex items-center gap-1.5 rounded-xl px-4 py-2 text-xs font-black transition-all ${
+                        displayMode === 'scoreboard'
+                          ? 'bg-[#c9a64a] text-[#0b1f4b] shadow-lg ring-2 ring-white scale-102'
+                          : 'bg-white/10 text-white hover:bg-white/20'
+                      }`}
+                    >
+                      📊 Scoreboard
+                    </button>
+
+                    <button
+                      disabled={displayBusy}
+                      onClick={() => handleSetDisplayMode('timer')}
+                      className={`inline-flex items-center gap-1.5 rounded-xl px-4 py-2 text-xs font-black transition-all ${
+                        displayMode === 'timer'
+                          ? 'bg-[#c9a64a] text-[#0b1f4b] shadow-lg ring-2 ring-white scale-102'
+                          : 'bg-white/10 text-white hover:bg-white/20'
+                      }`}
+                    >
+                      ⏱️ Timer Debat
+                    </button>
+
+                    <Link
+                      href="/panggung"
+                      target="_blank"
+                      className="rounded-xl border border-white/30 bg-white/10 p-2 text-white hover:bg-white/20"
+                      title="Buka Layar Panggung di Tab Baru"
+                    >
+                      ↗
+                    </Link>
+                  </div>
+                </div>
               </div>
 
               {/* Bilik Suara Fisik (Akun 1, 2, 3) */}
@@ -642,8 +804,234 @@ export default function AdminDashboard({
                   <span className="text-xl">👥</span>
                   <h3 className="mt-1 font-bold text-[#0b1f4b]">Pasangan Calon (Paslon)</h3>
                   <p className="mt-0.5 text-xs text-slate-600">
-                    Ubah data profil, foto, dan visi misi 3 pasangan calon.
+                    Ubah data profil, foto, dan visi misi {pairs.length} pasangan calon.
                   </p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* TAB: KENDALI LAYAR PANGGUNG (PROYEKTOR / TV) */}
+          {active === 'panggung' && (
+            <div className="space-y-6">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div>
+                  <h2 className="font-serif text-lg sm:text-xl font-bold text-[#0b1f4b]">
+                    Kendali Layar Panggung (Proyektor / TV)
+                  </h2>
+                  <p className="mt-0.5 text-xs text-slate-500">
+                    Ganti tampilan proyektor panggung secara langsung tanpa perlu login akun di laptop panggung.
+                  </p>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <Link
+                    href="/panggung"
+                    target="_blank"
+                    className="inline-flex items-center gap-2 rounded-xl bg-[#c9a64a] px-4 py-2 text-xs font-black text-[#0b1f4b] shadow-sm hover:bg-[#d8b55c]"
+                  >
+                    <span>⛶ Buka Layar Panggung (/panggung)</span>
+                    <span className="text-base">↗</span>
+                  </Link>
+                </div>
+              </div>
+
+              {/* Status Layar & Petunjuk Penggunaan */}
+              <div className="rounded-2xl border border-[#b0892f]/40 bg-[#fcfaf5] p-5 shadow-xs">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div>
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Status Saat Ini:</span>
+                    <div className="mt-1 flex items-center gap-2">
+                      <span className="h-3 w-3 rounded-full bg-emerald-500 animate-ping" />
+                      <span className="font-serif text-xl font-black text-[#0b1f4b]">
+                        {displayMode === 'banner' && '🎬 Video Banner (Auto-Repeat)'}
+                        {displayMode === 'scoreboard' && '📊 Live Scoreboard'}
+                        {displayMode === 'timer' && '⏱️ Timer Debat & Q&A'}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="text-xs text-slate-600 sm:text-right">
+                    <p className="font-semibold text-[#0b1f4b]">Cara Kerja Tanpa Akun Tambahan:</p>
+                    <p className="text-[11px] text-slate-500">
+                      Buka <b>/panggung</b> di laptop proyektor, tekan <b>F</b> untuk Fullscreen. Dari sini, klik mode di bawah untuk mengganti tampilan secara instan.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* 3 MODE TAMPILAN PANGGUNG */}
+              <div className="grid gap-4 sm:grid-cols-3">
+                {/* 1. Mode Video Banner */}
+                <div
+                  className={`flex flex-col justify-between rounded-2xl border-2 p-5 shadow-sm transition-all ${
+                    displayMode === 'banner'
+                      ? 'border-[#0b1f4b] bg-[#fbf6ea] ring-2 ring-[#c9a64a]/60'
+                      : 'border-slate-200 bg-white hover:border-slate-300'
+                  }`}
+                >
+                  <div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-2xl">🎬</span>
+                      {displayMode === 'banner' && (
+                        <span className="rounded-full bg-[#0b1f4b] px-2.5 py-0.5 text-[10px] font-extrabold text-[#c9a64a]">
+                          ● SEDANG TAMPIL
+                        </span>
+                      )}
+                    </div>
+                    <h3 className="mt-3 font-serif text-base font-bold text-[#0b1f4b]">
+                      Video Banner Pemilos
+                    </h3>
+                    <p className="mt-1 text-xs text-slate-600 leading-relaxed">
+                      Memutar video animasi banner secara otomatis dan berulang tanpa bar kontrol. Cocok saat jeda acara atau pembukaan.
+                    </p>
+                  </div>
+
+                  <div className="mt-5 space-y-2 border-t border-slate-200/60 pt-3">
+                    <button
+                      disabled={displayBusy || displayMode === 'banner'}
+                      onClick={() => handleSetDisplayMode('banner')}
+                      className={`w-full rounded-xl py-2 text-xs font-bold transition-all shadow-xs ${
+                        displayMode === 'banner'
+                          ? 'bg-emerald-600 text-white cursor-default'
+                          : 'bg-[#0b1f4b] text-white hover:bg-[#142c63]'
+                      }`}
+                    >
+                      {displayMode === 'banner' ? '✓ Sedang Tampil di Panggung' : 'Tampilkan Video Banner'}
+                    </button>
+
+                    <div className="flex items-center justify-between pt-1">
+                      <button
+                        onClick={handleToggleDisplaySound}
+                        className="text-[11px] font-semibold text-slate-600 hover:text-[#0b1f4b] underline"
+                      >
+                        {displaySound ? '🔊 Suara: AKTIF' : '🔇 Suara: BISU (Muted)'}
+                      </button>
+
+                      <Link
+                        href="/banner"
+                        target="_blank"
+                        className="text-[11px] font-bold text-[#0b1f4b] underline"
+                        title="Buka Video Banner Standalone"
+                      >
+                        Buka /banner ↗
+                      </Link>
+                    </div>
+                  </div>
+                </div>
+
+                {/* 2. Mode Live Scoreboard */}
+                <div
+                  className={`flex flex-col justify-between rounded-2xl border-2 p-5 shadow-sm transition-all ${
+                    displayMode === 'scoreboard'
+                      ? 'border-[#0b1f4b] bg-[#fbf6ea] ring-2 ring-[#c9a64a]/60'
+                      : 'border-slate-200 bg-white hover:border-slate-300'
+                  }`}
+                >
+                  <div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-2xl">📊</span>
+                      {displayMode === 'scoreboard' && (
+                        <span className="rounded-full bg-[#0b1f4b] px-2.5 py-0.5 text-[10px] font-extrabold text-[#c9a64a]">
+                          ● SEDANG TAMPIL
+                        </span>
+                      )}
+                    </div>
+                    <h3 className="mt-3 font-serif text-base font-bold text-[#0b1f4b]">
+                      Live Scoreboard Arena
+                    </h3>
+                    <p className="mt-1 text-xs text-slate-600 leading-relaxed">
+                      Menampilkan kartu kandidat paslon dan perolehan suara terungkap secara real-time dengan animasi bar pilar.
+                    </p>
+                  </div>
+
+                  <div className="mt-5 space-y-2 border-t border-slate-200/60 pt-3">
+                    <button
+                      disabled={displayBusy || displayMode === 'scoreboard'}
+                      onClick={() => handleSetDisplayMode('scoreboard')}
+                      className={`w-full rounded-xl py-2 text-xs font-bold transition-all shadow-xs ${
+                        displayMode === 'scoreboard'
+                          ? 'bg-emerald-600 text-white cursor-default'
+                          : 'bg-[#0b1f4b] text-white hover:bg-[#142c63]'
+                      }`}
+                    >
+                      {displayMode === 'scoreboard' ? '✓ Sedang Tampil di Panggung' : 'Tampilkan Scoreboard'}
+                    </button>
+
+                    <div className="flex items-center justify-between pt-1">
+                      <button
+                        onClick={() => setActive('scoreboard')}
+                        className="text-[11px] font-semibold text-slate-600 hover:text-[#0b1f4b] underline"
+                      >
+                        Atur Reveal Suara →
+                      </button>
+
+                      <Link
+                        href="/scoreboard"
+                        target="_blank"
+                        className="text-[11px] font-bold text-[#0b1f4b] underline"
+                      >
+                        Buka /scoreboard ↗
+                      </Link>
+                    </div>
+                  </div>
+                </div>
+
+                {/* 3. Mode Timer Debat */}
+                <div
+                  className={`flex flex-col justify-between rounded-2xl border-2 p-5 shadow-sm transition-all ${
+                    displayMode === 'timer'
+                      ? 'border-[#0b1f4b] bg-[#fbf6ea] ring-2 ring-[#c9a64a]/60'
+                      : 'border-slate-200 bg-white hover:border-slate-300'
+                  }`}
+                >
+                  <div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-2xl">⏱️</span>
+                      {displayMode === 'timer' && (
+                        <span className="rounded-full bg-[#0b1f4b] px-2.5 py-0.5 text-[10px] font-extrabold text-[#c9a64a]">
+                          ● SEDANG TAMPIL
+                        </span>
+                      )}
+                    </div>
+                    <h3 className="mt-3 font-serif text-base font-bold text-[#0b1f4b]">
+                      Timer Debat &amp; Tanya Jawab
+                    </h3>
+                    <p className="mt-1 text-xs text-slate-600 leading-relaxed">
+                      Menampilkan satu timer hitung mundur raksasa dan sorotan giliran bicara paslon/moderator di panggung.
+                    </p>
+                  </div>
+
+                  <div className="mt-5 space-y-2 border-t border-slate-200/60 pt-3">
+                    <button
+                      disabled={displayBusy || displayMode === 'timer'}
+                      onClick={() => handleSetDisplayMode('timer')}
+                      className={`w-full rounded-xl py-2 text-xs font-bold transition-all shadow-xs ${
+                        displayMode === 'timer'
+                          ? 'bg-emerald-600 text-white cursor-default'
+                          : 'bg-[#0b1f4b] text-white hover:bg-[#142c63]'
+                      }`}
+                    >
+                      {displayMode === 'timer' ? '✓ Sedang Tampil di Panggung' : 'Tampilkan Timer'}
+                    </button>
+
+                    <div className="flex items-center justify-between pt-1">
+                      <button
+                        onClick={() => setActive('timer')}
+                        className="text-[11px] font-semibold text-slate-600 hover:text-[#0b1f4b] underline"
+                      >
+                        Kendalikan Waktu →
+                      </button>
+
+                      <Link
+                        href="/timer"
+                        target="_blank"
+                        className="text-[11px] font-bold text-[#0b1f4b] underline"
+                      >
+                        Buka /timer ↗
+                      </Link>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
@@ -1322,90 +1710,243 @@ export default function AdminDashboard({
           {/* TAB 4: PASANGAN CALON (PAIRS) */}
           {active === 'pairs' && (
             <div className="space-y-5 sm:space-y-6">
-              <div>
-                <h2 className="font-serif text-lg sm:text-xl font-bold text-[#0b1f4b]">Kelola Pasangan Calon</h2>
-                <p className="mt-0.5 text-xs text-slate-500">
-                  Data 3 paslon yang tampil di beranda dan bilik suara.
-                </p>
+              <div className="flex flex-col justify-between gap-2 sm:flex-row sm:items-center">
+                <div>
+                  <h2 className="font-serif text-lg sm:text-xl font-bold text-[#0b1f4b]">
+                    Kelola Pasangan Calon ({pairs.length} Paslon Terdaftar)
+                  </h2>
+                  <p className="mt-0.5 text-xs text-slate-500">
+                    Nama Paslon 1 dan 2 sudah tersimpan. Klik &quot;Ganti Foto&quot; untuk mengganti foto kandidat.
+                  </p>
+                </div>
+                {!showAddPair && pairs.length < 5 && (
+                  <button
+                    onClick={() => {
+                      const nextNum = Math.max(0, ...pairs.map((x) => x.number)) + 1;
+                      setAddPairNumber(nextNum);
+                      setShowAddPair(true);
+                    }}
+                    className="self-start rounded-xl border border-[#0b1f4b] bg-white px-3.5 py-1.5 text-xs font-bold text-[#0b1f4b] shadow-xs hover:bg-slate-50 sm:self-auto"
+                  >
+                    + Tambah Paslon Baru
+                  </button>
+                )}
               </div>
 
-              <div className="grid gap-4 sm:grid-cols-3 sm:gap-5">
-                {[1, 2, 3].map((num) => {
-                  const p = pairs.find((x) => x.number === num);
-                  return (
+              {/* Form Tambah Paslon Baru (Hanya jika admin mengklik tombol Tambah) */}
+              {showAddPair && (
+                <form
+                  onSubmit={async (e) => {
+                    e.preventDefault();
+                    const fd = new FormData(e.currentTarget as HTMLFormElement);
+                    fd.set('number', String(addPairNumber));
+                    fd.set('photo_url', addPhotoDraft || '');
+                    fd.set('active', 'on');
+                    const res = await savePairAction(fd);
+                    if (res.ok) {
+                      notify(`Pasangan Calon #${addPairNumber} berhasil ditambahkan.`);
+                      setShowAddPair(false);
+                      setAddPhotoDraft('');
+                      refresh();
+                    } else {
+                      notify(res.error || 'Gagal menambahkan paslon.', 'error');
+                    }
+                  }}
+                  className="rounded-2xl border-2 border-dashed border-[#b0892f]/50 bg-[#fbf8f2] p-4 sm:p-5 shadow-sm space-y-3"
+                >
+                  <div className="flex items-center justify-between border-b border-slate-200/60 pb-2">
+                    <span className="font-serif text-sm font-bold text-[#0b1f4b]">
+                      ➕ Tambah Pasangan Calon No. Urut {addPairNumber}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setShowAddPair(false)}
+                      className="text-xs font-semibold text-slate-500 hover:text-slate-700"
+                    >
+                      Batal ✕
+                    </button>
+                  </div>
+
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <div>
+                      <label className="text-[10px] font-bold uppercase tracking-wider text-slate-600">
+                        Nomor Urut
+                      </label>
+                      <input
+                        type="number"
+                        min={1}
+                        value={addPairNumber}
+                        onChange={(e) => setAddPairNumber(Number(e.target.value))}
+                        className="mt-1 w-full rounded-xl border border-slate-300 bg-white px-3 py-1.5 text-xs font-bold focus:border-[#0b1f4b] focus:outline-none"
+                        required
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-bold uppercase tracking-wider text-slate-600">
+                        Foto Paslon
+                      </label>
+                      <div className="mt-1 flex items-center gap-2">
+                        {addPhotoDraft ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img src={addPhotoDraft} alt="Preview" className="h-10 w-10 rounded-lg object-cover border" />
+                        ) : null}
+                        <label className="cursor-pointer rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50">
+                          Pilih Foto
+                          <input
+                            type="file"
+                            accept="image/*"
+                            onChange={async (e) => {
+                              const f = e.target.files?.[0];
+                              if (!f) return;
+                              const compressed = await compressImageFile(f);
+                              setAddPhotoDraft(compressed);
+                            }}
+                            className="hidden"
+                          />
+                        </label>
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="text-[10px] font-bold uppercase tracking-wider text-slate-600">
+                        Nama Calon Ketua
+                      </label>
+                      <input
+                        name="chair_name"
+                        placeholder="Nama Ketua"
+                        required
+                        className="mt-1 w-full rounded-xl border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold focus:border-[#0b1f4b] focus:outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-bold uppercase tracking-wider text-slate-600">
+                        Nama Calon Wakil Ketua
+                      </label>
+                      <input
+                        name="vice_name"
+                        placeholder="Nama Wakil"
+                        required
+                        className="mt-1 w-full rounded-xl border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold focus:border-[#0b1f4b] focus:outline-none"
+                      />
+                    </div>
+                    <div className="sm:col-span-2">
+                      <label className="text-[10px] font-bold uppercase tracking-wider text-slate-600">
+                        Visi / Slogan
+                      </label>
+                      <textarea
+                        name="vision"
+                        rows={2}
+                        placeholder="Visi misi singkat…"
+                        className="mt-1 w-full rounded-xl border border-slate-300 bg-white px-3 py-1.5 text-xs focus:border-[#0b1f4b] focus:outline-none"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="flex gap-2 pt-2">
+                    <button
+                      type="submit"
+                      className="rounded-xl bg-[#0b1f4b] px-5 py-2 text-xs font-bold text-white shadow-sm hover:bg-[#142c63]"
+                    >
+                      Simpan Paslon Baru
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setShowAddPair(false)}
+                      className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                    >
+                      Batal
+                    </button>
+                  </div>
+                </form>
+              )}
+
+              {/* Daftar Paslon yang Ada di Database */}
+              {pairs.length === 0 ? (
+                <div className="p-8 text-center text-xs text-slate-400 rounded-2xl border border-dashed border-slate-300 bg-slate-50">
+                  Belum ada pasangan calon terdaftar. Klik &quot;+ Tambah Paslon Baru&quot; di atas.
+                </div>
+              ) : (
+                <div className={`grid gap-4 ${pairs.length === 2 ? 'max-w-4xl sm:grid-cols-2' : 'sm:grid-cols-3'} sm:gap-5`}>
+                  {pairs.map((p) => (
                     <form
-                      key={num}
+                      key={p.id}
                       onSubmit={async (e) => {
                         e.preventDefault();
                         const fd = new FormData(e.currentTarget as HTMLFormElement);
                         const res = await savePairAction(fd);
                         if (res.ok) {
-                          notify(`Pasangan Calon #${num} berhasil disimpan.`);
+                          notify(`Paslon #${p.number} (${p.chair_name} & ${p.vice_name}) berhasil disimpan.`);
                           refresh();
                         } else {
                           notify(res.error || 'Gagal menyimpan.', 'error');
                         }
                       }}
-                      className="flex flex-col justify-between rounded-2xl border border-slate-200 bg-white p-4 sm:p-5 shadow-sm transition-all"
+                      className="flex flex-col justify-between rounded-2xl border border-slate-200 bg-white p-4 sm:p-5 shadow-sm transition-all hover:border-[#0b1f4b]/30"
                     >
-                      <input type="hidden" name="number" value={num} />
+                      <input type="hidden" name="number" value={p.number} />
 
                       <div>
                         {/* Card Header with Number Badge */}
                         <div className="flex items-center justify-between border-b border-slate-100 pb-2.5">
                           <span className="rounded-lg bg-[#0b1f4b] px-2.5 py-1 font-mono text-xs font-extrabold text-[#c9a64a]">
-                            No. Urut {num}
+                            No. Urut {p.number}
                           </span>
-                          <span className={`text-[11px] font-bold ${p?.active ? 'text-emerald-600' : 'text-slate-400'}`}>
-                            {p?.active ? '● Aktif' : '○ Nonaktif'}
+                          <span className={`text-[11px] font-bold ${p.active ? 'text-emerald-600' : 'text-slate-400'}`}>
+                            {p.active ? '● Aktif di Pemilihan' : '○ Nonaktif'}
                           </span>
                         </div>
 
                         {/* Photo Preview & Input */}
-                        <div className="mt-3 flex flex-col items-center">
-                          {photoDrafts[num] || p?.photo_url ? (
+                        <div className="mt-3.5 flex flex-col items-center">
+                          {photoDrafts[p.number] || p.photo_url ? (
                             // eslint-disable-next-line @next/next/no-img-element
                             <img
-                              src={photoDrafts[num] || p?.photo_url}
-                              alt={`Paslon ${num}`}
-                              className="h-24 w-24 sm:h-28 sm:w-28 rounded-2xl border border-slate-200 object-cover shadow-sm ring-2 ring-slate-100"
+                              src={photoDrafts[p.number] || p.photo_url}
+                              alt={`Paslon ${p.number}`}
+                              className="h-28 w-28 sm:h-36 sm:w-36 rounded-2xl border-2 border-[#b0892f]/40 object-cover shadow-sm ring-2 ring-slate-100"
                             />
                           ) : (
-                            <div className="flex h-24 w-24 sm:h-28 sm:w-28 items-center justify-center rounded-2xl border-2 border-dashed border-slate-200 bg-slate-50 text-2xl font-bold text-slate-300">
-                              {num}
+                            <div className="flex h-28 w-28 sm:h-36 sm:w-36 items-center justify-center rounded-2xl border-2 border-dashed border-slate-200 bg-slate-50 text-2xl font-bold text-slate-300">
+                              {p.number}
                             </div>
                           )}
 
-                          <label className="mt-2.5 cursor-pointer rounded-lg border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-100 active:bg-slate-200">
-                            Pilih Foto
-                            <input
-                              type="file"
-                              accept="image/*"
-                              onChange={async (e) => {
-                                const f = e.target.files?.[0];
-                                if (!f) return;
-                                if (f.size > 1_500_000) {
-                                  alert('Ukuran foto maksimal 1.5 MB.');
-                                  return;
-                                }
-                                const dataUrl = await readFileAsDataURL(f);
-                                setPhotoDrafts((d) => ({ ...d, [num]: dataUrl }));
-                              }}
-                              className="hidden"
-                            />
-                          </label>
-                          <input type="hidden" name="photo_url" value={photoDrafts[num] || p?.photo_url || ''} />
+                          <div className="mt-2.5 flex flex-col items-center gap-1">
+                            <label className="cursor-pointer rounded-xl border border-[#0b1f4b] bg-white px-3.5 py-1.5 text-xs font-bold text-[#0b1f4b] shadow-xs hover:bg-slate-50 active:scale-95 transition-all">
+                              📷 Ganti Foto Paslon {p.number}
+                              <input
+                                type="file"
+                                accept="image/*"
+                                onChange={async (e) => {
+                                  const f = e.target.files?.[0];
+                                  if (!f) return;
+                                  try {
+                                    const compressed = await compressImageFile(f);
+                                    setPhotoDrafts((d) => ({ ...d, [p.number]: compressed }));
+                                    notify(`Foto baru Paslon #${p.number} dipilih. Klik "Simpan" untuk menerapkan.`);
+                                  } catch {
+                                    alert('Gagal memproses foto.');
+                                  }
+                                }}
+                                className="hidden"
+                              />
+                            </label>
+                            {photoDrafts[p.number] && (
+                              <span className="text-[10px] font-bold text-emerald-600">✓ Foto baru siap disimpan</span>
+                            )}
+                            <input type="hidden" name="photo_url" value={photoDrafts[p.number] || p.photo_url || ''} />
+                          </div>
                         </div>
 
-                        {/* Name Inputs */}
-                        <div className="mt-3 space-y-2.5">
+                        {/* Name Inputs - Andi & Budi, Citra & Dewi */}
+                        <div className="mt-3.5 space-y-2.5">
                           <div>
                             <label className="text-[10px] font-bold uppercase tracking-wider text-slate-600">
                               Calon Ketua
                             </label>
                             <input
                               name="chair_name"
-                              defaultValue={p?.chair_name || ''}
+                              defaultValue={p.chair_name}
                               placeholder="Nama Ketua"
                               required
                               className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-1.5 text-xs font-semibold focus:border-[#0b1f4b] focus:outline-none"
@@ -1417,7 +1958,7 @@ export default function AdminDashboard({
                             </label>
                             <input
                               name="vice_name"
-                              defaultValue={p?.vice_name || ''}
+                              defaultValue={p.vice_name}
                               placeholder="Nama Wakil"
                               required
                               className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-1.5 text-xs font-semibold focus:border-[#0b1f4b] focus:outline-none"
@@ -1429,7 +1970,7 @@ export default function AdminDashboard({
                             </label>
                             <textarea
                               name="vision"
-                              defaultValue={p?.vision || ''}
+                              defaultValue={p.vision || ''}
                               rows={2}
                               placeholder="Visi misi singkat…"
                               className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-1.5 text-xs focus:border-[#0b1f4b] focus:outline-none"
@@ -1441,38 +1982,41 @@ export default function AdminDashboard({
                       {/* Card Actions */}
                       <div className="mt-4 border-t border-slate-100 pt-3">
                         <label className="flex items-center gap-2 text-xs font-medium text-slate-600">
-                          <input type="checkbox" name="active" defaultChecked={p ? p.active === 1 : true} />
-                          Tampilkan di beranda
+                          <input type="checkbox" name="active" defaultChecked={p.active === 1} />
+                          Tampilkan di pemilihan
                         </label>
                         <div className="mt-2.5 flex gap-2">
                           <button
                             type="submit"
                             className="flex-1 rounded-xl bg-[#0b1f4b] py-2 text-xs font-bold text-white shadow-sm hover:bg-[#142c63]"
                           >
-                            Simpan
+                            Simpan Paslon {p.number}
                           </button>
-                          {p && (
-                            <button
-                              type="button"
-                              onClick={async () => {
-                                if (!confirm(`Hapus paslon nomor ${num}?`)) return;
-                                const fd = new FormData();
-                                fd.set('id', String(p.id));
-                                await deletePairAction(fd);
-                                notify(`Paslon #${num} dihapus.`);
+                          <button
+                            type="button"
+                            onClick={async () => {
+                              if (!confirm(`Hapus Pasangan Calon #${p.number} (${p.chair_name} & ${p.vice_name})?`)) return;
+                              const fd = new FormData();
+                              fd.set('id', String(p.id));
+                              fd.set('number', String(p.number));
+                              const res = await deletePairAction(fd);
+                              if (res.ok) {
+                                notify(`Paslon #${p.number} berhasil dihapus.`);
                                 refresh();
-                              }}
-                              className="rounded-xl border border-red-200 px-3 py-2 text-xs font-semibold text-red-600 hover:bg-red-50"
-                            >
-                              Hapus
-                            </button>
-                          )}
+                              } else {
+                                notify(res.error || 'Gagal menghapus.', 'error');
+                              }
+                            }}
+                            className="rounded-xl border border-red-200 px-3 py-2 text-xs font-semibold text-red-600 hover:bg-red-50"
+                          >
+                            Hapus
+                          </button>
                         </div>
                       </div>
                     </form>
-                  );
-                })}
-              </div>
+                  ))}
+                </div>
+              )}
             </div>
           )}
 

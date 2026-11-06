@@ -126,7 +126,7 @@ export default function HomeClient({ pairs, settings }: Props) {
             Daftar pasangan calon belum diterbitkan oleh panitia.
           </div>
         ) : (
-          <div className="mt-8 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+          <div className={`mt-8 grid gap-6 ${pairs.length === 2 ? 'max-w-4xl mx-auto sm:grid-cols-2' : 'sm:grid-cols-2 lg:grid-cols-3'}`}>
             {pairs.map((p) => (
               <article
                 key={p.id}

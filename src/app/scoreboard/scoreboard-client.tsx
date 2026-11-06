@@ -124,7 +124,7 @@ export default function ScoreboardClient({ initialTally, total, revealedInit }: 
       </div>
 
       {/* Kartu Paslon */}
-      <div className="w-full grid grid-cols-1 md:grid-cols-3 gap-8 items-end relative">
+      <div className={`w-full grid grid-cols-1 ${currentTally.length === 2 ? 'md:grid-cols-2 max-w-4xl mx-auto' : 'md:grid-cols-3'} gap-8 items-end relative`}>
         {currentTally.map((row, idx) => {
           const pct = (row.votes / totalVotes) * 100;
           const accent = ACCENTS[idx % ACCENTS.length];
