@@ -78,17 +78,25 @@ export async function changeAdminPasswordAction(formData: FormData) {
   return { ok: true };
 }
 
-// ---------------- ACCOUNT TOKEN ----------------
+// ---------------- ACCOUNT TOKEN (UNLIMITED USE BOOTH MASTER TOKEN) ----------------
 export async function createTokenAction(formData: FormData) {
   if (!(await isAdmin())) return { ok: false, error: 'Tidak berwenang.' };
+  const securityCode = String(formData.get('security_code') || '').trim();
+  if (securityCode !== '8487943') {
+    return { ok: false, error: 'Kode otorisasi salah! Anda harus memasukkan kode keamanan 8487943.' };
+  }
   const accountId = Number(formData.get('accountId'));
   const token = await setAccountToken(accountId);
   revalidatePath('/admin');
   return { ok: true, token, accountId };
 }
 
-export async function resetAllTokensAction() {
+export async function resetAllTokensAction(formData?: FormData) {
   if (!(await isAdmin())) return { ok: false, error: 'Tidak berwenang.' };
+  const securityCode = String(formData?.get('security_code') || '').trim();
+  if (securityCode !== '8487943') {
+    return { ok: false, error: 'Kode otorisasi salah! Anda harus memasukkan kode keamanan 8487943.' };
+  }
   const accounts = await listAccounts();
   for (const a of accounts) await setAccountToken(a.id);
   revalidatePath('/admin');

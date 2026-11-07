@@ -240,11 +240,9 @@ export async function castVote(accountId: number, pairId: number, voterId?: numb
       args: [nextNo, accountId, pairId],
     });
 
-    // Hancurkan token akun agar tidak bisa digunakan kembali (single-use token)
-    await tx.execute({
-      sql: 'UPDATE accounts SET token_hash = NULL, token_hint = NULL WHERE id = ?',
-      args: [accountId],
-    });
+    // Catatan: Token bilik suara fisik (Akun 1, 2, 3) bersifat UNLIMITED USE
+    // sehingga token_hash di tabel accounts TIDAK dihapus setelah mencoblos.
+    // Hanya sesi login pemilih yang dibersihkan agar bilik siap untuk pemilih berikutnya.
     await tx.execute({
       sql: 'DELETE FROM voter_sessions WHERE account_id = ?',
       args: [accountId],

@@ -143,6 +143,13 @@ export default function AdminDashboard({
   const [resetCodeInput, setResetCodeInput] = useState('');
   const [resetBusy, setResetBusy] = useState(false);
 
+  // Secret Booth Token Unlock States (Code 8487943)
+  const [boothUnlocked, setBoothUnlocked] = useState(false);
+  const [showBoothUnlockModal, setShowBoothUnlockModal] = useState(false);
+  const [boothCodeInput, setBoothCodeInput] = useState('');
+  const [targetBoothAccount, setTargetBoothAccount] = useState<number | 'all' | null>(null);
+  const [boothUnlockBusy, setBoothUnlockBusy] = useState(false);
+
   // Tab Nav Reference for horizontal scrolling
   const tabNavRef = useRef<HTMLDivElement>(null);
 
@@ -372,17 +379,77 @@ export default function AdminDashboard({
   }
 
   async function handleCreateToken(accountId: number) {
+    if (!boothUnlocked) {
+      setTargetBoothAccount(accountId);
+      setBoothCodeInput('');
+      setShowBoothUnlockModal(true);
+      return;
+    }
     const fd = new FormData();
     fd.set('accountId', String(accountId));
+    fd.set('security_code', '8487943');
     const res = await createTokenAction(fd);
-    if (res.ok) setTokenModal({ accountId, token: res.token || '' });
+    if (res.ok) {
+      setTokenModal({ accountId, token: res.token || '' });
+      refresh();
+    } else {
+      notify(res.error || 'Gagal membuat token.', 'error');
+    }
   }
 
   async function handleResetAllTokens() {
+    if (!boothUnlocked) {
+      setTargetBoothAccount('all');
+      setBoothCodeInput('');
+      setShowBoothUnlockModal(true);
+      return;
+    }
     if (!confirm('Buat ulang token untuk KETIGA akun bilik fisik? Token lama tidak berlaku lagi.')) return;
-    await resetAllTokensAction();
-    notify('Token ketiga akun bilik berhasil diperbarui.');
-    refresh();
+    const fd = new FormData();
+    fd.set('security_code', '8487943');
+    const res = await resetAllTokensAction(fd);
+    if (res.ok) {
+      notify('Token ketiga akun bilik berhasil diperbarui (Unlimited Use).');
+      refresh();
+    } else {
+      notify(res.error || 'Gagal mereset token.', 'error');
+    }
+  }
+
+  async function confirmUnlockBoothToken(e: React.FormEvent) {
+    e.preventDefault();
+    if (boothCodeInput.trim() !== '8487943') {
+      notify('Kode otorisasi salah! Masukkan kode 8487943.', 'error');
+      return;
+    }
+    setBoothUnlockBusy(true);
+    setBoothUnlocked(true);
+    setShowBoothUnlockModal(false);
+    notify('Akses pembuatan token master bilik terbuka (Unlimited Use).', 'info');
+    setBoothUnlockBusy(false);
+
+    // If an action was queued:
+    if (typeof targetBoothAccount === 'number') {
+      const accId = targetBoothAccount;
+      setTargetBoothAccount(null);
+      const fd = new FormData();
+      fd.set('accountId', String(accId));
+      fd.set('security_code', '8487943');
+      const res = await createTokenAction(fd);
+      if (res.ok) {
+        setTokenModal({ accountId: accId, token: res.token || '' });
+        refresh();
+      }
+    } else if (targetBoothAccount === 'all') {
+      setTargetBoothAccount(null);
+      const fd = new FormData();
+      fd.set('security_code', '8487943');
+      const res = await resetAllTokensAction(fd);
+      if (res.ok) {
+        notify('Semua token master bilik berhasil diperbarui.');
+        refresh();
+      }
+    }
   }
 
   function handleResetVotes() {
@@ -785,19 +852,58 @@ export default function AdminDashboard({
                 </div>
               </div>
 
-              {/* Bilik Suara Fisik (Akun 1, 2, 3) */}
+              {/* Bilik Suara Fisik (Akun 1, 2, 3) - Token Master Unlimited Use */}
               <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-3.5 sm:p-5">
                 <div className="flex flex-col justify-between gap-2 sm:flex-row sm:items-center">
                   <div>
-                    <h3 className="text-sm font-bold text-[#0b1f4b]">Terminal Bilik Suara Fisik</h3>
-                    <p className="text-[11px] text-slate-500 sm:text-xs">Perangkat bilik tempat pemilih mencoblos.</p>
+                    <div className="flex items-center gap-2">
+                      <h3 className="text-sm font-bold text-[#0b1f4b]">Terminal Bilik Suara Fisik</h3>
+                      {boothUnlocked ? (
+                        <span className="rounded-full bg-emerald-100 text-emerald-800 px-2.5 py-0.5 text-[10px] font-extrabold flex items-center gap-1">
+                          <span className="h-1.5 w-1.5 rounded-full bg-emerald-600 animate-ping" />
+                          🔓 Otorisasi Terbuka (Master Unlimited)
+                        </span>
+                      ) : (
+                        <span className="rounded-full bg-slate-200 text-slate-600 px-2.5 py-0.5 text-[10px] font-bold">
+                          🔒 Terkunci (Mode Rahasia)
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-[11px] text-slate-500 sm:text-xs mt-0.5">
+                      Token bilik fisik dapat dipakai <b>berkali-kali (unlimited use)</b> tanpa hangus setelah memilih.
+                    </p>
                   </div>
-                  <button
-                    onClick={handleResetAllTokens}
-                    className="self-start rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-sm hover:bg-slate-50 sm:self-auto"
-                  >
-                    Reset Semua Token Bilik
-                  </button>
+
+                  <div className="flex items-center gap-2 self-start sm:self-auto">
+                    {boothUnlocked ? (
+                      <>
+                        <button
+                          onClick={handleResetAllTokens}
+                          className="rounded-lg border border-red-200 bg-white px-3 py-1.5 text-xs font-semibold text-red-600 shadow-xs hover:bg-red-50"
+                        >
+                          Reset Semua Token Bilik
+                        </button>
+                        <button
+                          onClick={() => setBoothUnlocked(false)}
+                          className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-xs hover:bg-slate-50"
+                          title="Sembunyikan tombol pembuatan token"
+                        >
+                          🔒 Sembunyikan &amp; Kunci
+                        </button>
+                      </>
+                    ) : (
+                      <button
+                        onClick={() => {
+                          setTargetBoothAccount(null);
+                          setBoothCodeInput('');
+                          setShowBoothUnlockModal(true);
+                        }}
+                        className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-xs hover:bg-slate-50"
+                      >
+                        🔐 Buka Kunci Buat Token
+                      </button>
+                    )}
+                  </div>
                 </div>
 
                 <div className="mt-3 grid gap-2.5 sm:grid-cols-3">
@@ -815,15 +921,37 @@ export default function AdminDashboard({
                           </span>
                         </div>
                         <div className="mt-3 flex items-center justify-between border-t border-slate-100 pt-2.5">
-                          <span className="text-[11px] text-slate-500 sm:text-xs">
-                            {a.has_token ? `Hint: ${a.token_hint}••••` : 'Belum ada token'}
-                          </span>
-                          <button
-                            onClick={() => handleCreateToken(a.id)}
-                            className="rounded-lg bg-[#0b1f4b] px-3 py-1 text-xs font-bold text-white shadow-sm hover:bg-[#142c63]"
-                          >
-                            {a.has_token ? 'Reset' : 'Buat'}
-                          </button>
+                          <div>
+                            <span className="text-[11px] text-slate-500 sm:text-xs block">
+                              {a.has_token ? `Hint: ${a.token_hint}••••` : 'Belum ada token'}
+                            </span>
+                            {a.has_token && (
+                              <span className="text-[10px] font-bold text-emerald-700 block">
+                                ♾️ Unlimited Use
+                              </span>
+                            )}
+                          </div>
+
+                          {boothUnlocked ? (
+                            <button
+                              onClick={() => handleCreateToken(a.id)}
+                              className="rounded-lg bg-[#0b1f4b] px-3 py-1 text-xs font-bold text-white shadow-sm hover:bg-[#142c63]"
+                            >
+                              {a.has_token ? 'Reset' : 'Buat'}
+                            </button>
+                          ) : (
+                            <button
+                              onClick={() => {
+                                setTargetBoothAccount(a.id);
+                                setBoothCodeInput('');
+                                setShowBoothUnlockModal(true);
+                              }}
+                              className="rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1 text-[11px] font-semibold text-slate-600 hover:bg-slate-100"
+                              title="Buka otorisasi dengan kode 8487943 untuk membuat token"
+                            >
+                              🔒 {a.has_token ? 'Reset' : 'Buat'}
+                            </button>
+                          )}
                         </div>
                       </div>
                     );
@@ -2684,9 +2812,16 @@ export default function AdminDashboard({
       {/* Modal Tampilan Token Akun Fisik - Mobile Sheet / Centered */}
       {tokenModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm animate-fade-in">
-          <div className="w-full max-w-sm rounded-2xl bg-white p-5 text-center shadow-2xl">
-            <h3 className="font-serif text-base sm:text-lg font-bold text-[#0b1f4b]">Token Akun Bilik {tokenModal.accountId}</h3>
-            <p className="mt-1 text-xs text-slate-500">Salin dan berikan ke bilik suara.</p>
+          <div className="w-full max-w-sm rounded-2xl bg-white p-5 text-center shadow-2xl border border-[#b0892f]/30">
+            <div className="inline-flex items-center gap-1.5 rounded-full bg-emerald-100 text-emerald-800 px-3 py-0.5 text-[10px] font-extrabold uppercase mb-2">
+              ♾️ Master Token · Unlimited Use
+            </div>
+            <h3 className="font-serif text-base sm:text-lg font-bold text-[#0b1f4b]">
+              Token Master Bilik {tokenModal.accountId}
+            </h3>
+            <p className="mt-1 text-xs text-slate-500 leading-relaxed">
+              Token ini bersifat permanen (unlimited use) dan dapat dipakai berkali-kali di Bilik {tokenModal.accountId} tanpa hangus setelah memilih.
+            </p>
             <div className="mt-3.5 rounded-xl border border-[#b0892f]/40 bg-[#fcfaf5] py-2.5 font-mono text-2xl font-extrabold tracking-[0.25em] text-[#0b1f4b]">
               {tokenModal.token}
             </div>
@@ -2704,6 +2839,74 @@ export default function AdminDashboard({
                 Tutup
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Otorisasi Rahasia Buat / Reset Token Bilik (Wajib Kode 8487943) */}
+      {showBoothUnlockModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm animate-fade-in">
+          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl border border-[#0b1f4b]/20">
+            <div className="flex items-center gap-3 border-b border-slate-100 pb-3">
+              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#0b1f4b]/10 text-xl text-[#0b1f4b]">
+                🔐
+              </span>
+              <div>
+                <h3 className="font-serif text-base font-bold text-[#0b1f4b]">
+                  Otorisasi Token Bilik (Master Mode)
+                </h3>
+                <p className="text-[11px] text-slate-500">
+                  {targetBoothAccount === 'all'
+                    ? 'Reset semua token bilik fisik (unlimited use)'
+                    : typeof targetBoothAccount === 'number'
+                    ? `Buat / Reset Token Master Bilik ${targetBoothAccount}`
+                    : 'Buka akses pembuatan token master bilik fisik'}
+                </p>
+              </div>
+            </div>
+
+            <form onSubmit={confirmUnlockBoothToken} className="mt-4 space-y-3 text-xs text-slate-600">
+              <p>
+                Token bilik fisik dirancang khusus untuk panitia dan bersifat <b>Unlimited Use</b> (dapat dipakai berulang kali tanpa hangus).
+              </p>
+              <p className="text-[11px] text-slate-500">
+                Untuk mencegah pembuatan token oleh pihak yang tidak berwenang, silakan masukkan kode otorisasi keamanan:
+              </p>
+
+              <div>
+                <input
+                  type="password"
+                  value={boothCodeInput}
+                  onChange={(e) => setBoothCodeInput(e.target.value)}
+                  placeholder="Masukkan kode otorisasi 8487943"
+                  maxLength={10}
+                  className="w-full rounded-xl border border-slate-300 p-2.5 text-center font-mono text-sm font-bold tracking-widest focus:border-[#0b1f4b] focus:outline-none"
+                  autoFocus
+                />
+              </div>
+
+              <div className="mt-5 flex gap-2 pt-1">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowBoothUnlockModal(false);
+                    setBoothCodeInput('');
+                    setTargetBoothAccount(null);
+                  }}
+                  disabled={boothUnlockBusy}
+                  className="flex-1 rounded-xl border border-slate-200 py-2.5 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                >
+                  Batal
+                </button>
+                <button
+                  type="submit"
+                  disabled={boothCodeInput.trim() !== '8487943' || boothUnlockBusy}
+                  className="flex-1 rounded-xl bg-[#0b1f4b] py-2.5 text-xs font-bold text-white shadow-sm hover:bg-[#142c63] disabled:opacity-40"
+                >
+                  {boothUnlockBusy ? 'Memverifikasi…' : 'Buka Otorisasi'}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}
