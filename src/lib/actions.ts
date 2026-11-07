@@ -98,9 +98,14 @@ export async function resetAllTokensAction(formData?: FormData) {
     return { ok: false, error: 'Kode otorisasi salah! Anda harus memasukkan kode keamanan 8487943.' };
   }
   const accounts = await listAccounts();
-  for (const a of accounts) await setAccountToken(a.id);
+  const results: { id: number; label: string; token: string }[] = [];
+  for (const a of accounts) {
+    const token = await setAccountToken(a.id);
+    results.push({ id: a.id, label: a.label, token });
+  }
   revalidatePath('/admin');
-  return { ok: true };
+  revalidatePath('/', 'layout');
+  return { ok: true, tokens: results };
 }
 
 // ---------------- PAIRS ----------------

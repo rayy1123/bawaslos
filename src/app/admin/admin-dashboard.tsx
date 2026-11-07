@@ -150,6 +150,14 @@ export default function AdminDashboard({
   const [targetBoothAccount, setTargetBoothAccount] = useState<number | 'all' | null>(null);
   const [boothUnlockBusy, setBoothUnlockBusy] = useState(false);
 
+  // Accounts state with plain tokens
+  const [accountsList, setAccountsList] = useState<Account[]>(accounts);
+  const [batchTokenModal, setBatchTokenModal] = useState<{ id: number; label: string; token: string }[] | null>(null);
+
+  useEffect(() => {
+    setAccountsList(accounts);
+  }, [accounts]);
+
   // Tab Nav Reference for horizontal scrolling
   const tabNavRef = useRef<HTMLDivElement>(null);
 
@@ -389,8 +397,16 @@ export default function AdminDashboard({
     fd.set('accountId', String(accountId));
     fd.set('security_code', '8487943');
     const res = await createTokenAction(fd);
-    if (res.ok) {
+    if (res.ok && res.token) {
+      setAccountsList((prev) =>
+        prev.map((a) =>
+          a.id === accountId
+            ? { ...a, has_token: true, token_plain: res.token!, token_hint: res.token!.slice(0, 4) }
+            : a
+        )
+      );
       setTokenModal({ accountId, token: res.token || '' });
+      notify(`Token Bilik ${accountId} berhasil dibuat (Unlimited Use)!`);
       refresh();
     } else {
       notify(res.error || 'Gagal membuat token.', 'error');
@@ -409,6 +425,17 @@ export default function AdminDashboard({
     fd.set('security_code', '8487943');
     const res = await resetAllTokensAction(fd);
     if (res.ok) {
+      if (res.tokens) {
+        setAccountsList((prev) =>
+          prev.map((a) => {
+            const found = res.tokens?.find((t: any) => t.id === a.id);
+            return found
+              ? { ...a, has_token: true, token_plain: found.token, token_hint: found.token.slice(0, 4) }
+              : a;
+          })
+        );
+        setBatchTokenModal(res.tokens);
+      }
       notify('Token ketiga akun bilik berhasil diperbarui (Unlimited Use).');
       refresh();
     } else {
@@ -436,7 +463,14 @@ export default function AdminDashboard({
       fd.set('accountId', String(accId));
       fd.set('security_code', '8487943');
       const res = await createTokenAction(fd);
-      if (res.ok) {
+      if (res.ok && res.token) {
+        setAccountsList((prev) =>
+          prev.map((a) =>
+            a.id === accId
+              ? { ...a, has_token: true, token_plain: res.token!, token_hint: res.token!.slice(0, 4) }
+              : a
+          )
+        );
         setTokenModal({ accountId: accId, token: res.token || '' });
         refresh();
       }
@@ -446,6 +480,17 @@ export default function AdminDashboard({
       fd.set('security_code', '8487943');
       const res = await resetAllTokensAction(fd);
       if (res.ok) {
+        if (res.tokens) {
+          setAccountsList((prev) =>
+            prev.map((a) => {
+              const found = res.tokens?.find((t: any) => t.id === a.id);
+              return found
+                ? { ...a, has_token: true, token_plain: found.token, token_hint: found.token.slice(0, 4) }
+                : a;
+            })
+          );
+          setBatchTokenModal(res.tokens);
+        }
         notify('Semua token master bilik berhasil diperbarui.');
         refresh();
       }
@@ -907,12 +952,12 @@ export default function AdminDashboard({
                 </div>
 
                 <div className="mt-3 grid gap-2.5 sm:grid-cols-3">
-                  {accounts.map((a) => {
+                  {accountsList.map((a) => {
                     const votes = byAccount.find((b) => b.account_id === a.id)?.count || 0;
                     return (
                       <div
                         key={a.id}
-                        className="flex flex-col justify-between rounded-xl border border-slate-200 bg-white p-3 sm:p-4 shadow-sm"
+                        className="flex flex-col justify-between rounded-xl border border-slate-200 bg-white p-3.5 sm:p-4 shadow-sm"
                       >
                         <div className="flex items-center justify-between">
                           <span className="font-serif text-sm font-extrabold text-[#0b1f4b]">{a.label}</span>
@@ -921,39 +966,63 @@ export default function AdminDashboard({
                           </span>
                         </div>
                         <div className="mt-3 flex items-center justify-between border-t border-slate-100 pt-2.5">
-                          <div>
+                          <div className="min-w-0 flex-1 pr-2">
                             {boothUnlocked && a.token_plain ? (
-                              <div className="flex items-center gap-1">
-                                <span className="font-mono text-xs font-black tracking-widest text-[#0b1f4b] bg-[#fbf6ea] border border-[#b0892f]/40 px-2 py-0.5 rounded-md">
-                                  {a.token_plain}
+                              <div>
+                                <div className="flex items-center gap-1.5 flex-wrap">
+                                  <span className="font-mono text-sm font-black tracking-widest text-[#0b1f4b] bg-[#fbf6ea] border border-[#b0892f]/40 px-2 py-0.5 rounded-lg">
+                                    {a.token_plain}
+                                  </span>
+                                  <button
+                                    type="button"
+                                    onClick={() => copyToClipboard(a.token_plain!, `Token ${a.label} (${a.token_plain}) tersalin!`)}
+                                    className="rounded-lg bg-slate-100 hover:bg-slate-200 px-2 py-1 text-xs font-bold text-slate-700 active:scale-95 transition-all"
+                                    title="Salin Kode Token"
+                                  >
+                                    📋 Salin
+                                  </button>
+                                </div>
+                                <span className="text-[10px] font-bold text-emerald-700 block mt-1">
+                                  ♾️ Unlimited Use (Aktif)
                                 </span>
-                                <button
-                                  type="button"
-                                  onClick={() => copyToClipboard(a.token_plain!, `Token ${a.label} (${a.token_plain}) tersalin!`)}
-                                  className="rounded p-1 text-slate-500 hover:text-black hover:bg-slate-100 text-[11px]"
-                                  title="Salin Kode Token"
-                                >
-                                  📋
-                                </button>
+                              </div>
+                            ) : boothUnlocked && a.has_token ? (
+                              <div>
+                                <div className="flex items-center gap-1.5 flex-wrap">
+                                  <span className="font-mono text-xs font-bold text-slate-500 bg-slate-50 border border-slate-200 px-2 py-0.5 rounded">
+                                    {a.token_hint}••••
+                                  </span>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleCreateToken(a.id)}
+                                    className="text-[10px] font-bold text-[#b0892f] underline hover:text-black"
+                                    title="Klik untuk buat token baru yang terlihat penuh"
+                                  >
+                                    Reset baru
+                                  </button>
+                                </div>
+                                <span className="text-[10px] font-medium text-slate-400 block mt-0.5">
+                                  Token lama (Klik &quot;Reset baru&quot; untuk lihat token)
+                                </span>
                               </div>
                             ) : (
-                              <span className="text-[11px] text-slate-500 sm:text-xs block">
-                                {a.has_token
-                                  ? (boothUnlocked ? `Hint: ${a.token_hint}••••` : `Hint: ${a.token_hint}••••`)
-                                  : 'Belum ada token'}
-                              </span>
-                            )}
-                            {a.has_token && (
-                              <span className="text-[10px] font-bold text-emerald-700 block mt-0.5">
-                                ♾️ Unlimited Use
-                              </span>
+                              <div>
+                                <span className="text-xs font-mono text-slate-400 block">
+                                  {a.has_token ? '••••••••' : 'Belum ada token'}
+                                </span>
+                                {a.has_token && (
+                                  <span className="text-[10px] font-medium text-slate-400 block mt-0.5">
+                                    🔒 Terkunci (Mode Rahasia)
+                                  </span>
+                                )}
+                              </div>
                             )}
                           </div>
 
                           {boothUnlocked ? (
                             <button
                               onClick={() => handleCreateToken(a.id)}
-                              className="rounded-lg bg-[#0b1f4b] px-3 py-1 text-xs font-bold text-white shadow-sm hover:bg-[#142c63]"
+                              className="rounded-lg bg-[#0b1f4b] px-3.5 py-1.5 text-xs font-bold text-white shadow-sm hover:bg-[#142c63] shrink-0"
                             >
                               {a.has_token ? 'Reset' : 'Buat'}
                             </button>
@@ -964,10 +1033,10 @@ export default function AdminDashboard({
                                 setBoothCodeInput('');
                                 setShowBoothUnlockModal(true);
                               }}
-                              className="rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1 text-[11px] font-semibold text-slate-600 hover:bg-slate-100"
-                              title="Buka otorisasi dengan kode 8487943 untuk membuat token"
+                              className="rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1.5 text-[11px] font-semibold text-slate-600 hover:bg-slate-100 shrink-0"
+                              title="Buka otorisasi dengan kode 8487943 untuk melihat / membuat token"
                             >
-                              🔒 {a.has_token ? 'Reset' : 'Buat'}
+                              🔒 {a.has_token ? 'Lihat / Reset' : 'Buat'}
                             </button>
                           )}
                         </div>
@@ -2855,6 +2924,49 @@ export default function AdminDashboard({
                 className="rounded-xl border border-slate-200 px-4 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50"
               >
                 Tutup
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Tampilan Semua Token Bilik (Reset Semua) */}
+      {batchTokenModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm animate-fade-in">
+          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl border border-[#b0892f]/40">
+            <div className="inline-flex items-center gap-1.5 rounded-full bg-emerald-100 text-emerald-800 px-3 py-0.5 text-[10px] font-extrabold uppercase mb-2">
+              ♾️ 3 Token Master Bilik Berhasil Dibuat
+            </div>
+            <h3 className="font-serif text-lg font-bold text-[#0b1f4b]">
+              Daftar Token Bilik Fisik (Unlimited Use)
+            </h3>
+            <p className="mt-1 text-xs text-slate-500 leading-relaxed">
+              Token ini bersifat permanen dan dapat dipakai berulang kali untuk mencoblos di masing-masing bilik:
+            </p>
+
+            <div className="mt-4 space-y-2.5">
+              {batchTokenModal.map((t) => (
+                <div key={t.id} className="flex items-center justify-between rounded-xl border border-slate-200 bg-[#fcfaf5] p-3">
+                  <div>
+                    <span className="font-bold text-xs text-[#0b1f4b]">{t.label}</span>
+                    <p className="font-mono text-lg font-black tracking-widest text-[#0b1f4b]">{t.token}</p>
+                  </div>
+                  <button
+                    onClick={() => copyToClipboard(t.token, `Token ${t.label} (${t.token}) tersalin!`)}
+                    className="rounded-lg bg-[#0b1f4b] px-3 py-1.5 text-xs font-bold text-white hover:bg-[#142c63]"
+                  >
+                    📋 Salin
+                  </button>
+                </div>
+              ))}
+            </div>
+
+            <div className="mt-5 text-center">
+              <button
+                onClick={() => setBatchTokenModal(null)}
+                className="w-full rounded-xl border border-slate-200 py-2.5 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+              >
+                Tutup &amp; Simpan
               </button>
             </div>
           </div>

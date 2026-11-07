@@ -262,6 +262,27 @@ async function migrate(db: Client) {
   try {
     await db.execute('ALTER TABLE accounts ADD COLUMN token_plain TEXT');
   } catch {}
+  // Migrasi token lama: Jika ada akun bilik yang token_plain masih NULL, buatkan token lengkap otomatis
+  try {
+    const nullAccs = await db.execute('SELECT id FROM accounts WHERE token_plain IS NULL');
+    if (nullAccs.rows.length > 0) {
+      const crypto = require('node:crypto');
+      const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+      for (const row of nullAccs.rows) {
+        let plain = '';
+        const bytes = crypto.randomBytes(8);
+        for (let i = 0; i < 8; i++) {
+          plain += alphabet[bytes[i] % alphabet.length];
+        }
+        const salt = crypto.randomBytes(16).toString('hex');
+        const hash = crypto.scryptSync(plain, salt, 64).toString('hex');
+        await db.execute({
+          sql: 'UPDATE accounts SET token_hash = ?, token_hint = ?, token_plain = ? WHERE id = ?',
+          args: [salt + ':' + hash, plain.slice(0, 4), plain, row.id],
+        });
+      }
+    }
+  } catch {}
   try {
     await db.execute('ALTER TABLE news ADD COLUMN cover_url TEXT');
   } catch {}
