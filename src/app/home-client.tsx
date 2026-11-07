@@ -2,7 +2,14 @@
 
 import Link from 'next/link';
 import type { Pair, Settings } from '@/lib/queries';
-import { BallotIcon, ArrowRight, SealIcon, CheckIcon } from '@/components/icons';
+import {
+  BallotIcon,
+  ArrowRight,
+  ShieldCheckIcon,
+  KeyIcon,
+  ChartBarIcon,
+  TrophyIcon,
+} from '@/components/icons';
 import LogoSeal from '@/components/LogoSeal';
 
 type Props = {
@@ -16,13 +23,13 @@ export default function HomeClient({ pairs, settings }: Props) {
     <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6 sm:py-12">
       {/* 1. Hero & Masthead Section */}
       <section className="relative overflow-hidden rounded-3xl border border-[#0b1f4b]/10 bg-gradient-to-b from-white to-[#faf8f3] p-6 text-center shadow-xs sm:p-12">
-        {/* Decorative civic ambient background glow */}
+        {/* Subtle civic ambient background glow */}
         <div className="pointer-events-none absolute -top-24 left-1/2 h-72 w-72 -translate-x-1/2 rounded-full bg-[#b0892f]/10 blur-3xl" />
 
         <div className="relative flex flex-col items-center">
           {/* Official Emblem Logo */}
           <div className="relative group">
-            <div className="absolute -inset-1.5 rounded-full bg-gradient-to-tr from-[#b0892f]/30 to-[#0b1f4b]/20 blur-sm transition-all group-hover:blur-md" />
+            <div className="absolute -inset-1.5 rounded-full bg-gradient-to-tr from-[#b0892f]/20 to-[#0b1f4b]/15 blur-sm transition-all group-hover:blur-md" />
             <LogoSeal
               src={settings.logo_url}
               className="relative h-28 w-28 sm:h-36 sm:w-36 drop-shadow-md transition-transform duration-300 hover:scale-105"
@@ -63,14 +70,15 @@ export default function HomeClient({ pairs, settings }: Props) {
               href="/scoreboard"
               className="micro-btn inline-flex items-center gap-2 rounded-xl border border-slate-300 bg-white px-5 py-3 text-sm font-bold text-[#0b1f4b] shadow-xs hover:bg-slate-50"
             >
-              📊 Live Scoreboard
+              <ChartBarIcon className="h-4 w-4 text-[#b0892f]" />
+              Live Scoreboard
             </Link>
 
             <Link
               href="/panduan"
               className="micro-btn inline-flex items-center gap-1.5 px-4 py-3 text-xs font-semibold text-slate-600 hover:text-[#b0892f]"
             >
-              Tata Cara Memilih →
+              Tata Cara Memilih
             </Link>
           </div>
         </div>
@@ -78,9 +86,9 @@ export default function HomeClient({ pairs, settings }: Props) {
 
       {/* 2. Trust Pillars / Asas Pemilihan Strip */}
       <section className="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-3">
-        <div className="micro-card flex items-center gap-3 rounded-2xl border border-slate-200/80 bg-white p-4 shadow-xs">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#0b1f4b]/10 text-lg text-[#0b1f4b]">
-            🛡️
+        <div className="micro-card flex items-center gap-3.5 rounded-2xl border border-slate-200/80 bg-white p-4 shadow-xs">
+          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[#0b1f4b]/10 text-[#0b1f4b]">
+            <ShieldCheckIcon className="h-5 w-5" />
           </div>
           <div>
             <h2 className="text-xs font-bold uppercase tracking-wide text-[#0b1f4b]">Asas LUBER JURDIL</h2>
@@ -88,9 +96,9 @@ export default function HomeClient({ pairs, settings }: Props) {
           </div>
         </div>
 
-        <div className="micro-card flex items-center gap-3 rounded-2xl border border-slate-200/80 bg-white p-4 shadow-xs">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-amber-50 text-lg text-[#b0892f]">
-            🔐
+        <div className="micro-card flex items-center gap-3.5 rounded-2xl border border-slate-200/80 bg-white p-4 shadow-xs">
+          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-amber-50 text-[#b0892f]">
+            <KeyIcon className="h-5 w-5" />
           </div>
           <div>
             <h2 className="text-xs font-bold uppercase tracking-wide text-[#0b1f4b]">Token Single-Use</h2>
@@ -98,9 +106,9 @@ export default function HomeClient({ pairs, settings }: Props) {
           </div>
         </div>
 
-        <div className="micro-card flex items-center gap-3 rounded-2xl border border-slate-200/80 bg-white p-4 shadow-xs">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-emerald-50 text-lg text-emerald-700">
-            📊
+        <div className="micro-card flex items-center gap-3.5 rounded-2xl border border-slate-200/80 bg-white p-4 shadow-xs">
+          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-emerald-50 text-emerald-700">
+            <ChartBarIcon className="h-5 w-5" />
           </div>
           <div>
             <h2 className="text-xs font-bold uppercase tracking-wide text-[#0b1f4b]">Hasil Transparan</h2>
@@ -112,8 +120,7 @@ export default function HomeClient({ pairs, settings }: Props) {
       {/* 3. Candidate Pairs (Pasangan Calon) */}
       <section className="mt-12 sm:mt-16">
         <div className="text-center">
-          <span className="label-official">Kandidat Pemimpin</span>
-          <h2 className="mt-1.5 font-serif text-2xl font-bold text-[#0b1f4b] sm:text-3xl">
+          <h2 className="font-serif text-2xl font-bold text-[#0b1f4b] sm:text-3xl">
             Daftar Pasangan Calon
           </h2>
           <p className="mx-auto mt-2 max-w-xl text-xs text-slate-600 sm:text-sm">
@@ -188,7 +195,7 @@ export default function HomeClient({ pairs, settings }: Props) {
                       href="/login-pemilih"
                       className="micro-btn inline-flex w-full items-center justify-center gap-1.5 rounded-xl bg-slate-100 py-2.5 text-xs font-bold text-[#0b1f4b] hover:bg-[#0b1f4b] hover:text-white"
                     >
-                      Pilih Paslon Ini di Bilik Suara →
+                      Pilih Paslon Ini
                     </Link>
                   </div>
                 </div>
@@ -201,8 +208,7 @@ export default function HomeClient({ pairs, settings }: Props) {
       {/* 4. Alur Pemilihan (3 Langkah Mudah) */}
       <section className="mt-16 rounded-3xl border border-slate-200 bg-white p-6 sm:p-10 shadow-xs">
         <div className="text-center">
-          <span className="label-official">Tata Cara Pelaksanaan</span>
-          <h2 className="mt-1 font-serif text-xl font-bold text-[#0b1f4b] sm:text-2xl">
+          <h2 className="font-serif text-xl font-bold text-[#0b1f4b] sm:text-2xl">
             Alur Pemilihan di TPS Digital
           </h2>
           <p className="mx-auto mt-1 text-xs text-slate-500">
