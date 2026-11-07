@@ -137,7 +137,7 @@ export default function SuratClient({
         {/* KOP SURAT RESMI */}
         <header className="border-b-4 border-double border-black pb-3 text-center">
           <div className="flex items-center justify-between gap-4">
-            <div className="flex h-20 w-20 shrink-0 items-center justify-center">
+            <div className="flex h-24 w-24 shrink-0 items-center justify-center">
               <LogoSeal src={settings.logo_url} className="h-20 w-20" />
             </div>
 
@@ -159,9 +159,14 @@ export default function SuratClient({
               </p>
             </div>
 
-            <div className="flex h-20 w-20 shrink-0 items-center justify-center">
-              {/* Optional right logo / mascot */}
-              <LogoSeal src={settings.mascot_url || '/logo.png'} className="h-20 w-20" />
+            <div className="flex h-24 w-24 shrink-0 items-center justify-center">
+              {/* Logo Resmi SMK Negeri 64 Jakarta */}
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src="/logo-smkn64.png"
+                alt="Logo SMK Negeri 64 Jakarta"
+                className="h-24 w-auto max-h-24 max-w-24 object-contain"
+              />
             </div>
           </div>
         </header>
