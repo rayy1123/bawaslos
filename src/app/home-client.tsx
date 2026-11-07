@@ -52,7 +52,7 @@ export default function HomeClient({ pairs, settings }: Props) {
           <div className="mt-7 flex flex-wrap items-center justify-center gap-3">
             <Link
               href="/login-pemilih"
-              className="inline-flex items-center gap-2 rounded-xl bg-[#0b1f4b] px-6 py-3 text-sm font-bold text-white shadow-md transition-all hover:bg-[#142c63] hover:shadow-lg active:scale-98"
+              className="micro-btn inline-flex items-center gap-2 rounded-xl bg-[#0b1f4b] px-6 py-3 text-sm font-bold text-white shadow-md hover:bg-[#142c63]"
             >
               <BallotIcon className="h-4 w-4 text-[#c9a64a]" />
               Masuk Bilik Suara
@@ -61,14 +61,14 @@ export default function HomeClient({ pairs, settings }: Props) {
 
             <Link
               href="/scoreboard"
-              className="inline-flex items-center gap-2 rounded-xl border border-slate-300 bg-white px-5 py-3 text-sm font-bold text-[#0b1f4b] shadow-xs transition-colors hover:bg-slate-50"
+              className="micro-btn inline-flex items-center gap-2 rounded-xl border border-slate-300 bg-white px-5 py-3 text-sm font-bold text-[#0b1f4b] shadow-xs hover:bg-slate-50"
             >
               📊 Live Scoreboard
             </Link>
 
             <Link
               href="/panduan"
-              className="inline-flex items-center gap-1.5 px-4 py-3 text-xs font-semibold text-slate-600 hover:text-[#b0892f]"
+              className="micro-btn inline-flex items-center gap-1.5 px-4 py-3 text-xs font-semibold text-slate-600 hover:text-[#b0892f]"
             >
               Tata Cara Memilih →
             </Link>
@@ -78,7 +78,7 @@ export default function HomeClient({ pairs, settings }: Props) {
 
       {/* 2. Trust Pillars / Asas Pemilihan Strip */}
       <section className="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-3">
-        <div className="flex items-center gap-3 rounded-2xl border border-slate-200/80 bg-white p-4 shadow-xs">
+        <div className="micro-card flex items-center gap-3 rounded-2xl border border-slate-200/80 bg-white p-4 shadow-xs">
           <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#0b1f4b]/10 text-lg text-[#0b1f4b]">
             🛡️
           </div>
@@ -88,7 +88,7 @@ export default function HomeClient({ pairs, settings }: Props) {
           </div>
         </div>
 
-        <div className="flex items-center gap-3 rounded-2xl border border-slate-200/80 bg-white p-4 shadow-xs">
+        <div className="micro-card flex items-center gap-3 rounded-2xl border border-slate-200/80 bg-white p-4 shadow-xs">
           <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-amber-50 text-lg text-[#b0892f]">
             🔐
           </div>
@@ -98,7 +98,7 @@ export default function HomeClient({ pairs, settings }: Props) {
           </div>
         </div>
 
-        <div className="flex items-center gap-3 rounded-2xl border border-slate-200/80 bg-white p-4 shadow-xs">
+        <div className="micro-card flex items-center gap-3 rounded-2xl border border-slate-200/80 bg-white p-4 shadow-xs">
           <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-emerald-50 text-lg text-emerald-700">
             📊
           </div>
@@ -130,7 +130,7 @@ export default function HomeClient({ pairs, settings }: Props) {
             {pairs.map((p) => (
               <article
                 key={p.id}
-                className="group flex flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xs transition-all duration-300 hover:-translate-y-1 hover:border-[#b0892f]/50 hover:shadow-lg"
+                className="group micro-card flex flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xs hover:border-[#b0892f]/50"
               >
                 {/* Photo & Number Badge */}
                 <div className="relative aspect-[4/3] w-full overflow-hidden bg-slate-100">
@@ -186,7 +186,7 @@ export default function HomeClient({ pairs, settings }: Props) {
                   <div className="mt-5 border-t border-slate-100 pt-3 text-center">
                     <Link
                       href="/login-pemilih"
-                      className="inline-flex w-full items-center justify-center gap-1.5 rounded-xl bg-slate-100 py-2 text-xs font-bold text-[#0b1f4b] transition-colors hover:bg-[#0b1f4b] hover:text-white"
+                      className="micro-btn inline-flex w-full items-center justify-center gap-1.5 rounded-xl bg-slate-100 py-2.5 text-xs font-bold text-[#0b1f4b] hover:bg-[#0b1f4b] hover:text-white"
                     >
                       Pilih Paslon Ini di Bilik Suara →
                     </Link>

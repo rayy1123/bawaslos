@@ -134,22 +134,113 @@ body {
   animation: timerPulse 1s ease-in-out infinite;
 }
 
+/* === SKELETON SHIMMER ANIMATION === */
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+.shimmer {
+  background: linear-gradient(
+    90deg,
+    rgba(226, 232, 240, 0.6) 20%,
+    rgba(248, 250, 252, 0.95) 38%,
+    rgba(226, 232, 240, 0.6) 55%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.6s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+.shimmer-dark {
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.05) 20%,
+    rgba(255, 255, 255, 0.16) 38%,
+    rgba(255, 255, 255, 0.05) 55%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.6s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+.shimmer-gold {
+  background: linear-gradient(
+    90deg,
+    rgba(197, 160, 89, 0.15) 20%,
+    rgba(197, 160, 89, 0.38) 38%,
+    rgba(197, 160, 89, 0.15) 55%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.6s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+/* === POLISHED MICRO-INTERACTIONS === */
+.micro-btn {
+  transition: transform 0.15s cubic-bezier(0.16, 1, 0.3, 1),
+              background-color 0.15s ease,
+              box-shadow 0.2s ease,
+              border-color 0.15s ease;
+}
+.micro-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 18px -4px rgba(11, 31, 75, 0.22);
+}
+.micro-btn:active {
+  transform: translateY(1px) scale(0.975);
+  box-shadow: 0 2px 6px -2px rgba(11, 31, 75, 0.2);
+}
+
+.micro-card {
+  transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1),
+              box-shadow 0.25s cubic-bezier(0.16, 1, 0.3, 1),
+              border-color 0.2s ease;
+}
+.micro-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 16px 36px -12px rgba(11, 31, 75, 0.14),
+              0 4px 12px -2px rgba(11, 31, 75, 0.06);
+}
+.micro-card:active {
+  transform: translateY(-1px) scale(0.995);
+}
+
+.micro-input {
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease;
+}
+.micro-input:focus {
+  border-color: var(--ink);
+  box-shadow: 0 0 0 3px rgba(11, 31, 75, 0.12);
+}
+
 /* main buttons: ink solid, hover gold */
 .btn-ink {
   background: var(--ink);
   color: #fff;
-  transition: background 0.2s ease, transform 0.1s ease;
+  transition: background 0.2s ease, transform 0.15s ease, box-shadow 0.2s ease;
 }
-.btn-ink:hover { background: #112a5e; }
-.btn-ink:active { transform: translateY(1px); }
+.btn-ink:hover {
+  background: #112a5e;
+  box-shadow: 0 6px 18px -4px rgba(11, 31, 75, 0.3);
+}
+.btn-ink:active {
+  transform: scale(0.975);
+}
 
 .btn-gold {
   background: var(--gold);
   color: #fff;
-  transition: background 0.2s ease, transform 0.1s ease;
+  transition: background 0.2s ease, transform 0.15s ease, box-shadow 0.2s ease;
 }
-.btn-gold:hover { background: #9c7826; }
-.btn-gold:active { transform: translateY(1px); }
+.btn-gold:hover {
+  background: #9c7826;
+  box-shadow: 0 6px 18px -4px rgba(176, 137, 47, 0.35);
+}
+.btn-gold:active {
+  transform: scale(0.975);
+}
 
 /* site nav */
 .site-nav {

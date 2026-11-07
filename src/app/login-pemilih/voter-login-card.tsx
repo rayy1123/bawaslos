@@ -85,7 +85,7 @@ export default function VoterLoginCard({ logoUrl, mascotUrl, orgName }: Props) {
                 <select
                   value={accountId}
                   onChange={(e) => setAccountId(Number(e.target.value))}
-                  className="mt-1 w-full rounded-lg border border-[#0b1f4b]/20 bg-slate-50 px-3 py-2 text-sm font-semibold text-[#0b1f4b] focus:border-[#0b1f4b] focus:outline-none"
+                  className="mt-1 w-full rounded-xl border border-[#0b1f4b]/20 bg-slate-50 px-3.5 py-2.5 text-sm font-semibold text-[#0b1f4b] focus:border-[#0b1f4b] focus:outline-none micro-input transition-all"
                 >
                   <option value={1}>Bilik Suara 1</option>
                   <option value={2}>Bilik Suara 2</option>
@@ -94,31 +94,45 @@ export default function VoterLoginCard({ logoUrl, mascotUrl, orgName }: Props) {
               </div>
               <div>
                 <label className="block text-sm font-medium text-[#2c3e63]">Token Pemilih</label>
-                <div className="mt-1 flex items-center rounded-lg border border-[#0b1f4b]/20 px-3 focus-within:border-[#0b1f4b]">
+                <div className="mt-1 flex items-center rounded-xl border border-[#0b1f4b]/20 px-3.5 py-1 focus-within:border-[#0b1f4b] focus-within:ring-2 focus-within:ring-[#0b1f4b]/15 micro-input transition-all">
                   <LockIcon className="h-4 w-4 text-[#b0892f]" />
                   <input
                     value={token}
                     onChange={(e) => setToken(e.target.value.toUpperCase())}
                     placeholder="8 karakter token"
                     maxLength={12}
-                    className="w-full bg-transparent px-2 py-2 text-sm uppercase tracking-widest outline-none"
+                    className="w-full bg-transparent px-2.5 py-2 text-sm uppercase tracking-widest outline-none"
                     autoFocus
                   />
                 </div>
               </div>
 
-              {err && <p className="text-sm font-medium text-[#8a2b2b]">{err}</p>}
+              {err && (
+                <div className="rounded-xl border border-red-200 bg-red-50 p-2.5 text-center text-xs font-semibold text-[#8a2b2b] animate-shake">
+                  ⚠️ {err}
+                </div>
+              )}
 
               <button
                 disabled={busy}
-                className="btn-ink flex w-full items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-sm font-bold disabled:opacity-50"
+                className="btn-ink micro-btn relative overflow-hidden flex w-full items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-bold disabled:opacity-70 shadow-sm"
               >
-                <BallotIcon className="h-4 w-4" /> Masukkan Token
+                {busy ? (
+                  <div className="flex items-center gap-2">
+                    <span className="h-4 w-4 rounded-full border-2 border-white/30 border-t-white animate-spin" />
+                    <span className="animate-pulse">Memverifikasi Token…</span>
+                    <span className="absolute inset-0 shimmer-dark opacity-30" />
+                  </div>
+                ) : (
+                  <>
+                    <BallotIcon className="h-4 w-4 text-[#c9a64a]" /> Masukkan Token
+                  </>
+                )}
               </button>
               <button
                 type="button"
                 onClick={() => router.push('/vote')}
-                className="flex w-full items-center justify-center gap-2 rounded-lg border border-[#0b1f4b]/20 px-4 py-2.5 text-sm font-semibold text-[#0b1f4b] hover:bg-[#f6f3ec]"
+                className="micro-btn flex w-full items-center justify-center gap-2 rounded-xl border border-[#0b1f4b]/20 px-4 py-2.5 text-sm font-semibold text-[#0b1f4b] hover:bg-[#f6f3ec]"
               >
                 <CheckIcon className="h-4 w-4" /> Lihat TPS (tanpa login)
               </button>

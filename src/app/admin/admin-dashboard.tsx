@@ -1369,9 +1369,17 @@ export default function AdminDashboard({
                   <button
                     type="submit"
                     disabled={genBusy}
-                    className="col-span-2 sm:col-span-1 rounded-xl bg-[#0b1f4b] py-2.5 sm:py-2 px-4 text-xs sm:text-sm font-bold text-white shadow-sm hover:bg-[#142c63] disabled:opacity-50"
+                    className="col-span-2 sm:col-span-1 micro-btn relative overflow-hidden rounded-xl bg-[#0b1f4b] py-2.5 sm:py-2 px-4 text-xs sm:text-sm font-bold text-white shadow-sm hover:bg-[#142c63] disabled:opacity-70"
                   >
-                    {genBusy ? 'Membuat…' : `Generate ${Math.max(0, genTo - genFrom + 1)} Token`}
+                    {genBusy ? (
+                      <span className="flex items-center justify-center gap-2">
+                        <span className="h-3.5 w-3.5 rounded-full border-2 border-white/30 border-t-white animate-spin" />
+                        <span className="animate-pulse">Membuat Token…</span>
+                        <span className="absolute inset-0 shimmer-dark opacity-30" />
+                      </span>
+                    ) : (
+                      `Generate ${Math.max(0, genTo - genFrom + 1)} Token`
+                    )}
                   </button>
 
                   <div className="col-span-2 flex items-center justify-between border-t border-slate-200/60 pt-2 sm:col-span-1 sm:border-0 sm:pt-0 sm:ml-auto">
@@ -2481,9 +2489,17 @@ export default function AdminDashboard({
 
                 <button
                   disabled={pwBusy}
-                  className="rounded-xl bg-[#0b1f4b] px-4 py-2 text-xs font-bold text-white shadow-sm hover:bg-[#142c63] disabled:opacity-50"
+                  className="micro-btn relative overflow-hidden rounded-xl bg-[#0b1f4b] px-5 py-2.5 text-xs font-bold text-white shadow-sm hover:bg-[#142c63] disabled:opacity-70"
                 >
-                  {pwBusy ? 'Menyimpan…' : 'Perbarui Password'}
+                  {pwBusy ? (
+                    <span className="flex items-center gap-2">
+                      <span className="h-3.5 w-3.5 rounded-full border-2 border-white/30 border-t-white animate-spin" />
+                      <span className="animate-pulse">Menyimpan Password…</span>
+                      <span className="absolute inset-0 shimmer-dark opacity-30" />
+                    </span>
+                  ) : (
+                    'Perbarui Password'
+                  )}
                 </button>
               </form>
 

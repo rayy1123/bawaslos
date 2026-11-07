@@ -176,9 +176,17 @@ export default function VoteClient({ pairs, accounts, voterAccount, logoUrl, org
               {loginErr && <p className="text-sm font-medium text-red-600">{loginErr}</p>}
               <button
                 disabled={loginBusy}
-                className="w-full rounded-lg bg-[#0b1f4b] px-4 py-2 text-sm font-bold text-white hover:bg-[#142c63] disabled:opacity-50"
+                className="btn-ink micro-btn relative overflow-hidden flex w-full items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-bold disabled:opacity-70 shadow-sm"
               >
-                {loginBusy ? 'Memeriksa…' : 'Masuk'}
+                {loginBusy ? (
+                  <div className="flex items-center gap-2">
+                    <span className="h-4 w-4 rounded-full border-2 border-white/30 border-t-white animate-spin" />
+                    <span className="animate-pulse">Memverifikasi…</span>
+                    <span className="absolute inset-0 shimmer-dark opacity-30" />
+                  </div>
+                ) : (
+                  'Masuk'
+                )}
               </button>
             </form>
             <div className="mt-4 text-center">
@@ -222,9 +230,9 @@ export default function VoteClient({ pairs, accounts, voterAccount, logoUrl, org
                     <button
                       disabled={voteBusy}
                       onClick={() => setConfirmPair(p)}
-                      className="mt-4 flex items-center justify-center gap-2 rounded-lg bg-[#0b1f4b] py-2.5 text-sm font-bold text-white hover:bg-[#142c63] disabled:opacity-60"
+                      className="btn-ink micro-btn mt-4 flex items-center justify-center gap-2 rounded-xl py-2.5 text-sm font-bold shadow-xs hover:shadow-md disabled:opacity-60"
                     >
-                      <BallotIcon className="h-4 w-4" /> Pilih Kandidat {p.number}
+                      <BallotIcon className="h-4 w-4 text-[#c9a64a]" /> Pilih Kandidat {p.number}
                     </button>
                   </div>
                 </div>
@@ -291,16 +299,24 @@ export default function VoteClient({ pairs, accounts, voterAccount, logoUrl, org
               <button
                 onClick={() => setConfirmPair(null)}
                 disabled={voteBusy}
-                className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                className="micro-btn rounded-xl border border-slate-300 px-5 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50"
               >
                 Batal
               </button>
               <button
                 onClick={confirmVote}
                 disabled={voteBusy}
-                className="rounded-lg bg-[#0b1f4b] px-4 py-2 text-sm font-bold text-white hover:bg-[#142c63] disabled:opacity-50"
+                className="btn-ink micro-btn relative overflow-hidden inline-flex items-center gap-2 rounded-xl px-5 py-2.5 text-sm font-bold disabled:opacity-70 shadow-sm"
               >
-                {voteBusy ? 'Mencatat…' : 'Ya, Pilih'}
+                {voteBusy ? (
+                  <div className="flex items-center gap-2">
+                    <span className="h-4 w-4 rounded-full border-2 border-white/30 border-t-white animate-spin" />
+                    <span className="animate-pulse">Menyimpan Pilihan…</span>
+                    <span className="absolute inset-0 shimmer-dark opacity-30" />
+                  </div>
+                ) : (
+                  'Ya, Pilih'
+                )}
               </button>
             </div>
           </div>

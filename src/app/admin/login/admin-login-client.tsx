@@ -116,13 +116,27 @@ export default function AdminLoginClient({
                 <a href="#" className="font-semibold text-[#0b1f4b] hover:text-[#b0892f]">Lupa Password?</a>
               </div>
 
-              {err && <p className="text-sm font-medium text-[#8a2b2b]">{err}</p>}
+              {err && (
+                <div className="rounded-xl border border-red-200 bg-red-50 p-2.5 text-center text-xs font-semibold text-[#8a2b2b]">
+                  ⚠️ {err}
+                </div>
+              )}
 
               <button
                 disabled={busy}
-                className="btn-ink flex w-full items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-sm font-bold disabled:opacity-50"
+                className="btn-ink micro-btn relative overflow-hidden flex w-full items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-bold disabled:opacity-70 shadow-sm"
               >
-                Masuk Dashboard <ArrowRight className="h-4 w-4" />
+                {busy ? (
+                  <div className="flex items-center gap-2">
+                    <span className="h-4 w-4 rounded-full border-2 border-white/30 border-t-white animate-spin" />
+                    <span className="animate-pulse">Memeriksa Kredensial…</span>
+                    <span className="absolute inset-0 shimmer-dark opacity-30" />
+                  </div>
+                ) : (
+                  <>
+                    Masuk Dashboard <ArrowRight className="h-4 w-4 text-[#c9a64a]" />
+                  </>
+                )}
               </button>
 
               <p className="flex items-center justify-center gap-1 text-center text-[10px] text-[#2c3e63]/70">
