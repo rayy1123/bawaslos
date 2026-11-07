@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useTransition } from 'react';
+import { useState, useEffect, useRef, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import {
@@ -132,10 +132,19 @@ export default function AdminDashboard({
   const [votingOpenDraft, setVotingOpenDraft] = useState(votingOpen);
   const [scoreboardPubDraft, setScoreboardPubDraft] = useState(scoreboard.published);
 
-  // Live Stage Display State (Banner / Scoreboard / Timer)
+  // Live Stage Display State (Banner / Scoreboard / Timer / Winner)
   const [displayMode, setDisplayMode] = useState<DisplayMode>(display?.mode || 'banner');
   const [displaySound, setDisplaySound] = useState<boolean>(display?.video_sound || false);
+  const [displayWinnerTarget, setDisplayWinnerTarget] = useState<string>(display?.winner_target || 'auto');
   const [displayBusy, setDisplayBusy] = useState<boolean>(false);
+
+  // Reset Security Modal States (Code 8487943)
+  const [showResetModal, setShowResetModal] = useState(false);
+  const [resetCodeInput, setResetCodeInput] = useState('');
+  const [resetBusy, setResetBusy] = useState(false);
+
+  // Tab Nav Reference for horizontal scrolling
+  const tabNavRef = useRef<HTMLDivElement>(null);
 
   const [photoDrafts, setPhotoDrafts] = useState<Record<number, string>>({});
   const [logoDraft, setLogoDraft] = useState('');
@@ -227,15 +236,29 @@ export default function AdminDashboard({
     };
   }, []);
 
-  async function handleSetDisplayMode(newMode: DisplayMode, sound = displaySound) {
+  async function handleSetDisplayMode(newMode: DisplayMode, sound = displaySound, target = displayWinnerTarget) {
     setDisplayBusy(true);
     setDisplayMode(newMode);
-    const res = await setDisplayModeAction({ mode: newMode, video_sound: sound });
+    setDisplayWinnerTarget(target);
+    const res = await setDisplayModeAction({ mode: newMode, video_sound: sound, winner_target: target });
     setDisplayBusy(false);
     if (res.ok) {
       notify(`Layar panggung dialihkan ke: ${newMode.toUpperCase()}`);
     } else {
       notify(res.error || 'Gagal mengubah layar panggung.', 'error');
+    }
+  }
+
+  function scrollTabs(direction: 'left' | 'right') {
+    if (tabNavRef.current) {
+      const amount = direction === 'left' ? -220 : 220;
+      tabNavRef.current.scrollBy({ left: amount, behavior: 'smooth' });
+    }
+  }
+
+  function handleTabWheel(e: React.WheelEvent) {
+    if (tabNavRef.current && e.deltaY !== 0) {
+      tabNavRef.current.scrollLeft += e.deltaY;
     }
   }
 
@@ -362,11 +385,28 @@ export default function AdminDashboard({
     refresh();
   }
 
-  async function handleResetVotes() {
-    if (!confirm('HAPUS SELURUH SUARA YANG MASUK? Semua perolehan paslon akan kembali ke 0. Tindakan ini tidak dapat dibatalkan.')) return;
-    await resetVotesAction();
-    notify('Seluruh suara berhasil direset.');
-    refresh();
+  function handleResetVotes() {
+    setResetCodeInput('');
+    setShowResetModal(true);
+  }
+
+  async function confirmExecuteResetVotes(e: React.FormEvent) {
+    e.preventDefault();
+    if (resetCodeInput.trim() !== '8487943') {
+      notify('Kode verifikasi salah! Ketik kode: 8487943', 'error');
+      return;
+    }
+    setResetBusy(true);
+    const res = await resetVotesAction('8487943');
+    setResetBusy(false);
+    if (res.ok) {
+      setShowResetModal(false);
+      setResetCodeInput('');
+      notify('Seluruh data suara berhasil direset.');
+      refresh();
+    } else {
+      notify(res.error || 'Gagal mereset suara.', 'error');
+    }
   }
 
   async function handleChangePw(e: React.FormEvent<HTMLFormElement>) {
@@ -575,11 +615,24 @@ export default function AdminDashboard({
           </div>
         </section>
 
-        {/* Tab Navigation - Smooth Mobile Touch Scroll */}
-        <nav className="mt-4 sm:mt-6 flex gap-1.5 overflow-x-auto pb-1 pt-0.5 no-scrollbar scroll-smooth">
+        {/* Tab Navigation with Left/Right Scroll Buttons & Mouse Wheel */}
+        <div className="relative mt-4 sm:mt-6 flex items-center">
+          <button
+            type="button"
+            onClick={() => scrollTabs('left')}
+            className="hidden sm:flex shrink-0 h-9 w-9 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-700 hover:bg-slate-100 shadow-xs mr-1 z-10 micro-btn"
+            title="Geser Tab ke Kiri"
+          >
+            ◀
+          </button>
+          <nav
+            ref={tabNavRef}
+            onWheel={handleTabWheel}
+            className="flex gap-1.5 overflow-x-auto pb-1 pt-0.5 no-scrollbar scroll-smooth flex-1"
+          >
           {[
             { id: 'overview', label: 'Ringkasan', icon: '⚡' },
-            { id: 'panggung', label: 'Kendali Panggung', icon: '🎬', badge: displayMode === 'banner' ? 'Banner' : displayMode === 'scoreboard' ? 'Scoreboard' : 'Timer' },
+            { id: 'panggung', label: 'Kendali Panggung', icon: '🎬', badge: displayMode === 'banner' ? 'Banner' : displayMode === 'scoreboard' ? 'Scoreboard' : displayMode === 'winner' ? 'Pemenang' : 'Timer' },
             { id: 'timer', label: 'Timer Debat', icon: '⏱️', badge: timerState.is_running ? '● Live' : undefined },
             { id: 'tokens', label: 'DPT & Token', icon: '🎟️', count: voters.length },
             { id: 'scoreboard', label: 'Scoreboard', icon: '🏆', badge: `${scoreboard.revealed}/${scoreboard.total}` },
@@ -624,6 +677,15 @@ export default function AdminDashboard({
             );
           })}
         </nav>
+        <button
+          type="button"
+          onClick={() => scrollTabs('right')}
+          className="hidden sm:flex shrink-0 h-9 w-9 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-700 hover:bg-slate-100 shadow-xs ml-1 z-10 micro-btn"
+          title="Geser Tab ke Kanan"
+        >
+          ▶
+        </button>
+      </div>
 
         {/* Tab Content Container */}
         <div className="mt-3 sm:mt-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-7">
@@ -1072,6 +1134,40 @@ export default function AdminDashboard({
                   </div>
 
                   <div className="mt-5 space-y-2 border-t border-slate-200/60 pt-3">
+                    {/* Pilihan Paslon yang Disorot */}
+                    <div>
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block mb-1">
+                        Pilihan Paslon Disorot:
+                      </span>
+                      <div className="flex gap-1">
+                        <button
+                          type="button"
+                          onClick={() => handleSetDisplayMode('winner', displaySound, 'auto')}
+                          className={`flex-1 rounded-lg py-1 px-1 text-[10px] font-bold ${
+                            displayWinnerTarget === 'auto'
+                              ? 'bg-[#0b1f4b] text-white shadow-xs'
+                              : 'border border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100'
+                          }`}
+                        >
+                          Otomatis
+                        </button>
+                        {pairs.map((p) => (
+                          <button
+                            key={p.number}
+                            type="button"
+                            onClick={() => handleSetDisplayMode('winner', displaySound, String(p.number))}
+                            className={`flex-1 rounded-lg py-1 px-1 text-[10px] font-bold ${
+                              displayWinnerTarget === String(p.number)
+                                ? 'bg-[#0b1f4b] text-white shadow-xs'
+                                : 'border border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100'
+                            }`}
+                          >
+                            Paslon {p.number}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
                     <button
                       disabled={displayBusy || displayMode === 'winner'}
                       onClick={() => handleSetDisplayMode('winner')}
@@ -2608,6 +2704,76 @@ export default function AdminDashboard({
                 Tutup
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Keamanan Reset Suara (Wajib Kode 8487943) */}
+      {showResetModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm animate-fade-in">
+          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl border border-red-200">
+            <div className="flex items-center gap-3 border-b border-red-100 pb-3">
+              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-red-100 text-xl text-red-600">
+                ⚠️
+              </span>
+              <div>
+                <h3 className="font-serif text-base font-bold text-red-700">
+                  Konfirmasi Reset Seluruh Suara
+                </h3>
+                <p className="text-[11px] text-slate-500">Tindakan ini menghapus seluruh perolehan suara</p>
+              </div>
+            </div>
+
+            <form onSubmit={confirmExecuteResetVotes} className="mt-4 space-y-3 text-xs text-slate-600">
+              <p>
+                Anda akan menghapus seluruh data suara yang telah masuk ke sistem. Seluruh perolehan suara kandidat akan kembali ke <b>0 (nol)</b>.
+              </p>
+              <p>
+                Data pasangan calon dan data DPT tetap tersimpan, namun status mencoblos pemilih akan dikembalikan ke belum memilih.
+              </p>
+
+              <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-center">
+                <p className="text-[11px] font-bold uppercase text-red-800">
+                  Ketik kode verifikasi keamanan di bawah ini:
+                </p>
+                <div className="mt-1 font-mono text-2xl font-black tracking-widest text-red-700 select-all">
+                  8487943
+                </div>
+              </div>
+
+              <div>
+                <input
+                  type="text"
+                  value={resetCodeInput}
+                  onChange={(e) => setResetCodeInput(e.target.value)}
+                  placeholder="Ketik 8487943 di sini"
+                  maxLength={10}
+                  className="w-full rounded-xl border border-slate-300 p-2.5 text-center font-mono text-sm font-bold tracking-widest focus:border-red-500 focus:outline-none"
+                  autoFocus
+                />
+              </div>
+
+              <div className="mt-5 flex gap-2 pt-1">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowResetModal(false);
+                    setResetCodeInput('');
+                  }}
+                  disabled={resetBusy}
+                  className="flex-1 rounded-xl border border-slate-200 py-2.5 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                >
+                  Batal
+                </button>
+                <button
+                  type="submit"
+                  disabled={resetCodeInput.trim() !== '8487943' || resetBusy}
+                  className="flex-1 rounded-xl bg-red-600 py-2.5 text-xs font-bold text-white shadow-sm hover:bg-red-700 disabled:opacity-40"
+                >
+                  {resetBusy ? 'Mereset…' : 'Konfirmasi Reset'}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, useMemo } from 'react';
 import Link from 'next/link';
 import type { Pair, Settings, DisplayState } from '@/lib/queries';
 import MpkLogo from '@/components/MpkLogo';
+import LogoSeal from '@/components/LogoSeal';
 
 type Props = {
   pairs: Pair[];
@@ -24,6 +25,21 @@ type Props = {
   display?: DisplayState;
 };
 
+// 18 decorative confetti pieces
+const CONFETTI_PIECES = [
+  { left: '5%', delay: '0s', duration: '5.2s', color: '#ffd700', size: '12px' },
+  { left: '12%', delay: '1.4s', duration: '6.1s', color: '#ff4d4d', size: '10px' },
+  { left: '22%', delay: '0.6s', duration: '4.8s', color: '#38bdf8', size: '14px' },
+  { left: '32%', delay: '2.1s', duration: '5.5s', color: '#c9a64a', size: '11px' },
+  { left: '42%', delay: '0.2s', duration: '6.4s', color: '#10b981', size: '13px' },
+  { left: '50%', delay: '1.8s', duration: '5.0s', color: '#fbbf24', size: '15px' },
+  { left: '58%', delay: '0.9s', duration: '5.8s', color: '#f43f5e', size: '10px' },
+  { left: '68%', delay: '2.4s', duration: '4.9s', color: '#38bdf8', size: '12px' },
+  { left: '78%', delay: '0.4s', duration: '6.2s', color: '#ffd700', size: '14px' },
+  { left: '88%', delay: '1.6s', duration: '5.3s', color: '#10b981', size: '11px' },
+  { left: '95%', delay: '0.8s', duration: '5.7s', color: '#c9a64a', size: '13px' },
+];
+
 export default function PemenangClient({
   pairs,
   settings,
@@ -33,51 +49,82 @@ export default function PemenangClient({
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [liveTally, setLiveTally] = useState(scoreboard.tally);
   const [liveTotal, setLiveTotal] = useState(scoreboard.total);
+  const [displayState, setDisplayState] = useState<DisplayState>(display || {
+    mode: 'winner',
+    video_sound: false,
+    winner_target: 'auto',
+    updated_at: '',
+  });
+
   const containerRef = useRef<HTMLDivElement>(null);
 
-  // Poll for scoreboard updates
+  // Poll for scoreboard & display updates
   useEffect(() => {
     let alive = true;
     const tick = async () => {
       try {
-        const res = await fetch('/api/scoreboard', { cache: 'no-store' });
-        if (!res.ok) return;
-        const data = await res.json();
-        if (alive && data.tally) {
-          setLiveTally(data.tally);
-          setLiveTotal(data.total || 0);
+        const [resSb, resDisp] = await Promise.all([
+          fetch('/api/scoreboard', { cache: 'no-store' }),
+          fetch('/api/display', { cache: 'no-store' }),
+        ]);
+
+        if (resSb.ok && alive) {
+          const dataSb = await resSb.json();
+          if (dataSb.tally) {
+            setLiveTally(dataSb.tally);
+            setLiveTotal(dataSb.total || 0);
+          }
+        }
+
+        if (resDisp.ok && alive) {
+          const dataDisp = await resDisp.json();
+          setDisplayState(dataDisp);
         }
       } catch {
         // Ignore network hiccups
       }
     };
-    const interval = setInterval(tick, 2000);
+
+    const interval = setInterval(tick, 1500);
     return () => {
       alive = false;
       clearInterval(interval);
     };
   }, []);
 
-  // Determine the winner (highest votes)
+  // Determine which candidate is highlighted
   const winnerData = useMemo(() => {
-    if (!liveTally || liveTally.length === 0) return null;
+    const target = displayState?.winner_target;
+    let selectedPair: any = null;
+
+    if (target === '1') {
+      selectedPair = pairs.find((p) => p.number === 1) || pairs[0];
+    } else if (target === '2') {
+      selectedPair = pairs.find((p) => p.number === 2) || pairs[1] || pairs[0];
+    }
+
     const sorted = [...liveTally].sort((a, b) => b.votes - a.votes);
     const top = sorted[0];
-    const second = sorted[1];
-    const isTie = top && second && top.votes === second.votes && top.votes > 0;
-    const fullPairInfo = pairs.find((p) => p.number === top.number) || top;
 
+    if (!selectedPair) {
+      if (top) {
+        selectedPair = pairs.find((p) => p.number === top.number) || top;
+      } else {
+        selectedPair = pairs[0];
+      }
+    }
+
+    const voteEntry = liveTally.find((t) => t.number === selectedPair?.number);
+    const votes = voteEntry?.votes ?? 0;
     const totalVotesCount = liveTotal || 1;
-    const percent = Math.round((top.votes / totalVotesCount) * 100);
+    const percent = Math.round((votes / totalVotesCount) * 100);
 
     return {
-      pair: fullPairInfo,
-      votes: top.votes,
+      pair: selectedPair,
+      votes,
       percent,
-      isTie,
-      hasVotes: top.votes > 0,
     };
-  }, [liveTally, pairs, liveTotal]);
+  }, [liveTally, pairs, liveTotal, displayState?.winner_target]);
 
   useEffect(() => {
     function onFullscreenChange() {
@@ -117,36 +164,58 @@ export default function PemenangClient({
     <div
       ref={containerRef}
       onDoubleClick={toggleFullscreen}
-      className="relative min-h-screen h-screen w-screen overflow-hidden bg-gradient-to-b from-[#030a17] via-[#071630] to-[#02060f] text-white flex flex-col justify-between p-4 sm:p-6 lg:p-8 select-none"
+      className="relative min-h-screen h-screen max-h-screen w-screen overflow-hidden bg-gradient-to-b from-[#030914] via-[#06142c] to-[#02050b] text-white flex flex-col justify-between p-4 sm:p-6 lg:p-7 select-none"
     >
-      {/* 1. Celebratory Golden Halo & Ambient Glows */}
-      <div className="pointer-events-none absolute -top-24 left-1/2 h-96 w-96 -translate-x-1/2 rounded-full bg-[#c9a64a]/20 blur-3xl animate-pulse" />
-      <div className="pointer-events-none absolute bottom-0 right-1/4 h-80 w-80 rounded-full bg-[#0b1f4b]/40 blur-3xl" />
-
-      {/* Floating Sparkle Particles */}
-      <div className="pointer-events-none absolute inset-0 overflow-hidden opacity-30">
-        <span className="absolute top-1/4 left-1/6 text-2xl animate-bounce">✨</span>
-        <span className="absolute top-1/3 right-1/5 text-xl animate-pulse">⭐</span>
-        <span className="absolute bottom-1/4 left-1/4 text-xl animate-pulse">✨</span>
-        <span className="absolute bottom-1/3 right-1/6 text-2xl animate-bounce">⭐</span>
+      {/* 1. VISUAL SPECTACLE: Rotating Golden Light Rays Background */}
+      <div className="pointer-events-none absolute inset-0 flex items-center justify-center overflow-hidden opacity-25">
+        <div
+          className="h-[120vw] w-[120vw] rounded-full animate-rays"
+          style={{
+            background:
+              'conic-gradient(from 0deg, transparent 0deg, rgba(201, 166, 74, 0.25) 20deg, transparent 40deg, rgba(255, 215, 0, 0.3) 60deg, transparent 80deg, rgba(201, 166, 74, 0.25) 100deg, transparent 120deg, rgba(255, 215, 0, 0.3) 140deg, transparent 160deg, rgba(201, 166, 74, 0.25) 180deg, transparent 200deg, rgba(255, 215, 0, 0.3) 220deg, transparent 240deg, rgba(201, 166, 74, 0.25) 260deg, transparent 280deg, rgba(255, 215, 0, 0.3) 300deg, transparent 320deg, rgba(201, 166, 74, 0.25) 340deg, transparent 360deg)',
+          }}
+        />
       </div>
 
-      {/* 2. TOP HEADER: Clean Official Seal + Session Title */}
-      <header className="relative z-10 flex items-center justify-between pb-2">
+      {/* Ambient Gold Radial Halo */}
+      <div className="pointer-events-none absolute -top-24 left-1/2 h-[32rem] w-[32rem] -translate-x-1/2 rounded-full bg-[#ffd700]/15 blur-3xl" />
+      <div className="pointer-events-none absolute bottom-0 left-1/2 h-80 w-80 -translate-x-1/2 rounded-full bg-[#0b1f4b]/50 blur-3xl" />
+
+      {/* Falling Celebratory Confetti Stream */}
+      <div className="pointer-events-none absolute inset-0 overflow-hidden">
+        {CONFETTI_PIECES.map((c, i) => (
+          <div
+            key={i}
+            className="absolute rounded-sm opacity-90 shadow-sm"
+            style={{
+              left: c.left,
+              top: '-10px',
+              width: c.size,
+              height: c.size,
+              backgroundColor: c.color,
+              animation: `confettiFall ${c.duration} linear infinite`,
+              animationDelay: c.delay,
+            }}
+          />
+        ))}
+      </div>
+
+      {/* 2. TOP HEADER: Official MPK & Bawaslos Seals */}
+      <header className="relative z-10 flex items-center justify-between border-b border-white/10 pb-2.5">
         <div className="flex items-center gap-3.5 sm:gap-4">
           <MpkLogo
             src={settings.logo_url}
-            className="h-14 w-14 sm:h-18 sm:w-18"
+            className="h-13 w-13 sm:h-16 sm:w-16"
             showText={false}
             animated={true}
           />
           <div>
-            <span className="font-mono text-xs sm:text-sm font-bold uppercase tracking-widest text-[#c9a64a]">
+            <span className="font-mono text-[10px] sm:text-xs font-bold uppercase tracking-widest text-[#ffd700]">
               MPK SMKN 64 JAKARTA · BAWASLOS
             </span>
-            <p className="font-serif text-sm sm:text-base font-semibold text-slate-300">
-              Hasil Akhir Resmi Pemilihan Ketua &amp; Wakil Ketua OSIS
-            </p>
+            <h1 className="font-serif text-sm sm:text-lg font-bold tracking-tight text-white drop-shadow-sm">
+              Sidang Pleno Penetapan Ketua &amp; Wakil Ketua OSIS Terpilih
+            </h1>
           </div>
         </div>
 
@@ -176,39 +245,39 @@ export default function PemenangClient({
         </div>
       </header>
 
-      {/* 3. CENTER: MAGNIFICENT WINNER SPOTLIGHT CARD */}
-      <main className="relative z-10 my-auto flex flex-col items-center justify-center text-center px-4">
-        {/* Celebration Trophy & Badge */}
-        <div className="flex flex-col items-center mb-3 sm:mb-4 animate-fade-up">
-          <div className="flex items-center justify-center mb-1">
-            <span className="text-4xl sm:text-5xl lg:text-6xl drop-shadow-[0_0_25px_rgba(201,166,74,0.6)] animate-bounce">
+      {/* 3. CENTER: SPECTACULAR WINNER SPOTLIGHT PODIUM */}
+      <main className="relative z-10 my-auto flex flex-col items-center justify-center text-center px-4 max-w-4xl mx-auto w-full">
+        {/* Championship Header Ribbon */}
+        <div className="flex flex-col items-center mb-3 animate-fade-up">
+          {/* Trophy & Golden Laurels */}
+          <div className="flex items-center justify-center gap-2 mb-1">
+            <span className="text-xl sm:text-2xl text-[#ffd700]">🌿</span>
+            <span className="text-4xl sm:text-5xl lg:text-6xl drop-shadow-[0_0_35px_rgba(255,215,0,0.7)] animate-bounce">
               🏆
             </span>
+            <span className="text-xl sm:text-2xl text-[#ffd700]">🌿</span>
           </div>
 
-          <span className="inline-block rounded-full border border-[#c9a64a]/50 bg-[#0b1f4b]/90 px-4 sm:px-6 py-1 font-mono text-[11px] sm:text-xs font-black tracking-widest text-[#c9a64a] uppercase shadow-lg backdrop-blur-md">
-            ★ PASANGAN CALON TERPILIH PERIODE 2026/2027 ★
-          </span>
+          <div className="inline-flex items-center gap-2 rounded-full border border-[#ffd700]/60 bg-gradient-to-r from-[#0b1f4b] via-[#163574] to-[#0b1f4b] px-5 sm:px-8 py-1.5 shadow-xl backdrop-blur-md">
+            <span className="h-2 w-2 rounded-full bg-[#ffd700] animate-ping" />
+            <span className="font-mono text-xs sm:text-sm font-black tracking-widest text-[#ffd700] uppercase">
+              ★ PASANGAN CALON TERPILIH PERIODE 2026/2027 ★
+            </span>
+            <span className="h-2 w-2 rounded-full bg-[#ffd700] animate-ping" />
+          </div>
 
-          <h2 className="mt-2 font-serif text-2xl sm:text-4xl lg:text-5xl font-extrabold tracking-tight text-white drop-shadow-md">
+          <h2 className="mt-2.5 font-serif text-2xl sm:text-4xl lg:text-5xl font-black tracking-tight text-white drop-shadow-lg">
             SELAMAT ATAS TERPILIHNYA
           </h2>
         </div>
 
         {/* Winner Hero Card */}
-        {winnerData?.isTie ? (
-          <div className="rounded-3xl border-2 border-amber-400 bg-[#0b1f4b]/80 p-8 shadow-2xl backdrop-blur-md max-w-lg">
-            <h3 className="font-serif text-2xl font-bold text-amber-300">Perolehan Suara Masih Imbang</h3>
-            <p className="mt-2 text-sm text-slate-300">
-              Kedua pasangan calon saat ini memperoleh jumlah suara yang sama ({winnerData.votes} suara).
-            </p>
-          </div>
-        ) : winner ? (
+        {winner && (
           <div className="group relative flex flex-col items-center animate-fade-up">
-            {/* Square Frame Photo of Winner with Glowing Gold Border */}
-            <div className="relative mb-4">
-              <div className="absolute -inset-2 rounded-3xl bg-gradient-to-r from-[#b0892f] via-[#c9a64a] to-[#e9c176] opacity-75 blur-md animate-pulse" />
-              <div className="relative h-44 w-44 sm:h-56 sm:w-56 lg:h-64 lg:w-64 overflow-hidden rounded-2xl border-4 border-[#c9a64a] bg-slate-900 shadow-2xl">
+            {/* Square Frame Photo of Winner with Multi-Layer Golden Glow */}
+            <div className="relative mb-3.5">
+              <div className="absolute -inset-3 rounded-3xl bg-gradient-to-r from-[#b0892f] via-[#ffd700] to-[#e9c176] opacity-80 blur-xl animate-pulse" />
+              <div className="relative h-44 w-44 sm:h-52 sm:w-52 lg:h-60 lg:w-60 overflow-hidden rounded-2xl border-4 border-[#ffd700] bg-slate-900 shadow-2xl">
                 {winner.photo_url ? (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img
@@ -217,58 +286,54 @@ export default function PemenangClient({
                     className="h-full w-full object-cover object-center"
                   />
                 ) : (
-                  <div className="flex h-full w-full items-center justify-center font-serif text-5xl font-black text-[#c9a64a]">
+                  <div className="flex h-full w-full items-center justify-center font-serif text-5xl font-black text-[#ffd700]">
                     {winner.number}
                   </div>
                 )}
                 {/* Number Badge */}
-                <div className="absolute top-2.5 left-2.5 rounded-lg bg-[#0b1f4b] px-3 py-1 text-xs sm:text-sm font-mono font-black text-[#c9a64a] shadow-md border border-[#c9a64a]/50">
+                <div className="absolute top-2.5 left-2.5 rounded-lg bg-[#0b1f4b] px-3 py-1 text-xs sm:text-sm font-mono font-black text-[#ffd700] shadow-md border border-[#ffd700]/50">
                   NO. {String(winner.number).padStart(2, '0')}
                 </div>
               </div>
             </div>
 
-            {/* Candidate Names in Grand Typography */}
+            {/* Candidate Names in Magnificent Plus Jakarta Sans Typography */}
             <h3 className="font-serif text-2xl sm:text-4xl lg:text-5xl font-black tracking-tight text-white drop-shadow-md">
               {winner.chair_name} &amp; {winner.vice_name}
             </h3>
-            <p className="mt-1 font-serif text-sm sm:text-lg font-bold text-[#c9a64a] tracking-wide">
-              Ketua &amp; Wakil Ketua OSIS Terpilih
+            <p className="mt-0.5 font-serif text-xs sm:text-base font-bold text-[#ffd700] tracking-wide">
+              Ketua &amp; Wakil Ketua OSIS Terpilih · SMK Negeri 64 Jakarta
             </p>
 
-            {/* Victory Statistics Pill */}
-            <div className="mt-4 flex flex-wrap items-center justify-center gap-2.5 sm:gap-4">
-              <div className="rounded-xl border border-white/20 bg-white/10 px-4 py-2 backdrop-blur-md">
+            {/* Victory Statistics Badges */}
+            <div className="mt-4 flex flex-wrap items-center justify-center gap-2 sm:gap-3.5">
+              <div className="rounded-xl border border-white/20 bg-white/10 px-4 py-2 backdrop-blur-md shadow-sm">
                 <span className="text-[10px] uppercase font-bold text-slate-300 block">Perolehan Suara</span>
-                <span className="font-mono text-lg sm:text-2xl font-black text-white">
+                <span className="font-mono text-base sm:text-xl font-black text-white">
                   {winnerData.votes.toLocaleString('id-ID')} Suara
                 </span>
               </div>
 
-              <div className="rounded-xl border border-[#c9a64a]/40 bg-[#c9a64a]/20 px-4 py-2 backdrop-blur-md">
-                <span className="text-[10px] uppercase font-bold text-[#e9c176] block">Persentase Kemenangan</span>
-                <span className="font-mono text-lg sm:text-2xl font-black text-[#c9a64a]">
+              <div className="rounded-xl border border-[#ffd700]/40 bg-[#ffd700]/20 px-4 py-2 backdrop-blur-md shadow-sm">
+                <span className="text-[10px] uppercase font-bold text-[#ffd700] block">Persentase</span>
+                <span className="font-mono text-base sm:text-xl font-black text-[#ffd700]">
                   {winnerData.percent}%
                 </span>
               </div>
 
-              <div className="rounded-xl border border-emerald-400/30 bg-emerald-950/40 px-4 py-2 backdrop-blur-md">
-                <span className="text-[10px] uppercase font-bold text-emerald-300 block">Status Hasil</span>
-                <span className="font-mono text-sm sm:text-base font-extrabold text-emerald-400 flex items-center gap-1.5 mt-1">
+              <div className="rounded-xl border border-emerald-400/40 bg-emerald-950/50 px-4 py-2 backdrop-blur-md shadow-sm">
+                <span className="text-[10px] uppercase font-bold text-emerald-300 block">Hasil Pemilihan</span>
+                <span className="font-mono text-xs sm:text-sm font-black text-emerald-400 flex items-center gap-1.5 mt-0.5">
                   ✓ Sah &amp; Ditetapkan
                 </span>
               </div>
             </div>
           </div>
-        ) : (
-          <div className="p-8 text-center text-sm text-slate-400">
-            Belum ada data perolehan suara yang masuk.
-          </div>
         )}
       </main>
 
       {/* 4. BOTTOM FOOTER: Official Signatory Legal Badge */}
-      <footer className="relative z-10 flex flex-col items-center justify-between gap-1 border-t border-white/10 pt-3 text-[11px] text-slate-400 sm:flex-row">
+      <footer className="relative z-10 flex flex-col items-center justify-between gap-1 border-t border-white/10 pt-2.5 text-[11px] text-slate-400 sm:flex-row">
         <span>
           Badan Pengawas Pemilihan OSIS ({settings.org_name || 'BAWASLOS'}) · SMK Negeri 64 Jakarta
         </span>

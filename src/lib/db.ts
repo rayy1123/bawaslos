@@ -131,12 +131,13 @@ const SCHEMA_SQL = `
     updated_at  TEXT NOT NULL DEFAULT (datetime('now'))
   );
 
-  -- State tampilan layar panggung / proyektor (banner / scoreboard / timer).
+  -- State tampilan layar panggung / proyektor (banner / scoreboard / timer / winner).
   CREATE TABLE IF NOT EXISTS display_state (
-    id          INTEGER PRIMARY KEY CHECK (id = 1),
-    mode        TEXT NOT NULL DEFAULT 'banner', -- 'banner' | 'scoreboard' | 'timer'
-    video_sound INTEGER NOT NULL DEFAULT 0,     -- 0 = mute, 1 = bersuara
-    updated_at  TEXT NOT NULL DEFAULT (datetime('now'))
+    id            INTEGER PRIMARY KEY CHECK (id = 1),
+    mode          TEXT NOT NULL DEFAULT 'banner', -- 'banner' | 'scoreboard' | 'timer' | 'winner'
+    video_sound   INTEGER NOT NULL DEFAULT 0,     -- 0 = mute, 1 = bersuara
+    winner_target TEXT NOT NULL DEFAULT 'auto',   -- 'auto' | '1' | '2'
+    updated_at    TEXT NOT NULL DEFAULT (datetime('now'))
   );
 `;
 
@@ -294,19 +295,24 @@ async function migrate(db: Client) {
   try {
     await db.execute(`
       CREATE TABLE IF NOT EXISTS display_state (
-        id          INTEGER PRIMARY KEY CHECK (id = 1),
-        mode        TEXT NOT NULL DEFAULT 'banner',
-        video_sound INTEGER NOT NULL DEFAULT 0,
-        updated_at  TEXT NOT NULL DEFAULT (datetime('now'))
+        id            INTEGER PRIMARY KEY CHECK (id = 1),
+        mode          TEXT NOT NULL DEFAULT 'banner',
+        video_sound   INTEGER NOT NULL DEFAULT 0,
+        winner_target TEXT NOT NULL DEFAULT 'auto',
+        updated_at    TEXT NOT NULL DEFAULT (datetime('now'))
       )
     `);
     const countDisplay = await db.execute('SELECT COUNT(*) AS c FROM display_state');
     if (Number(countDisplay.rows[0]?.c ?? 0) === 0) {
       await db.execute(`
-        INSERT INTO display_state (id, mode, video_sound)
-        VALUES (1, 'banner', 0)
+        INSERT INTO display_state (id, mode, video_sound, winner_target)
+        VALUES (1, 'banner', 0, 'auto')
       `);
     }
+  } catch {}
+
+  try {
+    await db.execute("ALTER TABLE display_state ADD COLUMN winner_target TEXT NOT NULL DEFAULT 'auto'");
   } catch {}
 
   // Pastikan Paslon 3 terhapus bersih dari database

@@ -177,6 +177,30 @@ body {
   animation: shimmer 1.6s cubic-bezier(0.4, 0, 0.6, 1) infinite;
 }
 
+/* === CELEBRATORY WINNER CONFETTI & RAYS ANIMATION === */
+@keyframes confettiFall {
+  0% { transform: translateY(-10vh) rotate(0deg); opacity: 1; }
+  100% { transform: translateY(105vh) rotate(720deg); opacity: 0.2; }
+}
+
+@keyframes winnerGlowPulse {
+  0%, 100% { transform: scale(1); filter: drop-shadow(0 0 30px rgba(201, 166, 74, 0.4)); }
+  50% { transform: scale(1.02); filter: drop-shadow(0 0 50px rgba(233, 193, 118, 0.7)); }
+}
+
+.animate-winner-glow {
+  animation: winnerGlowPulse 3s ease-in-out infinite;
+}
+
+@keyframes rayRotate {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.animate-rays {
+  animation: rayRotate 45s linear infinite;
+}
+
 /* === POLISHED MICRO-INTERACTIONS === */
 .micro-btn {
   transition: transform 0.15s cubic-bezier(0.16, 1, 0.3, 1),

@@ -476,8 +476,9 @@ export async function resetVotes(): Promise<void> {
   const db = await ensureDb();
   await db.execute('DELETE FROM votes');
   await db.execute('DELETE FROM voter_sessions');
+  await db.execute('UPDATE voters SET is_used = 0, used_at = NULL, used_booth = NULL');
   await db.execute('UPDATE scoreboard_state SET revealed = 0');
-  await audit('RESET', 'Seluruh suara direset');
+  await audit('RESET', 'Seluruh suara direset dengan kode keamanan 8487943');
 }
 
 // ---------- SCOREBOARD STATE (dikendalikan admin) ----------
@@ -839,6 +840,7 @@ export type DisplayMode = 'banner' | 'scoreboard' | 'timer' | 'winner';
 export type DisplayState = {
   mode: DisplayMode;
   video_sound: boolean;
+  winner_target: string; // 'auto' | '1' | '2'
   updated_at: string;
 };
 
@@ -850,6 +852,7 @@ export async function getDisplayState(): Promise<DisplayState> {
     return {
       mode: 'banner',
       video_sound: false,
+      winner_target: 'auto',
       updated_at: new Date().toISOString(),
     };
   }
@@ -858,6 +861,7 @@ export async function getDisplayState(): Promise<DisplayState> {
       ? String(row.mode)
       : 'banner') as DisplayMode,
     video_sound: Boolean(row.video_sound),
+    winner_target: String(row.winner_target || 'auto'),
     updated_at: String(row.updated_at || ''),
   };
 }
@@ -865,25 +869,29 @@ export async function getDisplayState(): Promise<DisplayState> {
 export async function setDisplayState(data: {
   mode?: DisplayMode;
   video_sound?: boolean;
+  winner_target?: string;
 }): Promise<DisplayState> {
   const db = await ensureDb();
   const cur = await getDisplayState();
 
   const nextMode = data.mode ?? cur.mode;
   const nextSound = data.video_sound !== undefined ? data.video_sound : cur.video_sound;
+  const nextWinnerTarget = data.winner_target ?? cur.winner_target;
 
   await db.execute({
     sql: `UPDATE display_state SET
       mode = ?,
       video_sound = ?,
+      winner_target = ?,
       updated_at = datetime('now')
       WHERE id = 1`,
-    args: [nextMode, nextSound ? 1 : 0],
+    args: [nextMode, nextSound ? 1 : 0, nextWinnerTarget],
   });
 
   return {
     mode: nextMode,
     video_sound: nextSound,
+    winner_target: nextWinnerTarget,
     updated_at: new Date().toISOString(),
   };
 }

@@ -245,12 +245,13 @@ export async function resetVotersAction() {
 }
 
 // ---------------- RESET ----------------
-export async function resetVotesAction() {
+export async function resetVotesAction(code?: string) {
   if (!(await isAdmin())) return { ok: false, error: 'Tidak berwenang.' };
+  if (code !== '8487943') {
+    return { ok: false, error: 'Kode konfirmasi salah! Anda harus memasukkan kode 8487943.' };
+  }
   await resetVotes();
-  revalidatePath('/');
-  revalidatePath('/scoreboard');
-  revalidatePath('/admin');
+  revalidatePath('/', 'layout');
   return { ok: true };
 }
 
@@ -352,6 +353,7 @@ export async function getDisplayAction() {
 export async function setDisplayModeAction(data: {
   mode: DisplayMode;
   video_sound?: boolean;
+  winner_target?: string;
 }) {
   if (!(await isAdmin())) return { ok: false, error: 'Tidak berwenang.' };
   const res = await setDisplayState(data);
