@@ -5,6 +5,7 @@ import Link from 'next/link';
 import type { Pair, Settings, DisplayState, DisplayMode, TimerState } from '@/lib/queries';
 import TimerClient from '@/app/timer/timer-client';
 import ScoreboardClient from '@/app/scoreboard/scoreboard-client';
+import PemenangClient from '@/app/pemenang/pemenang-client';
 
 type Props = {
   pairs: Pair[];
@@ -106,6 +107,8 @@ export default function PanggungClient({
         setDisplayState((prev) => ({ ...prev, mode: 'scoreboard' }));
       } else if (e.code === 'Digit3') {
         setDisplayState((prev) => ({ ...prev, mode: 'timer' }));
+      } else if (e.code === 'Digit4') {
+        setDisplayState((prev) => ({ ...prev, mode: 'winner' }));
       }
     }
 
@@ -195,26 +198,37 @@ export default function PanggungClient({
         </div>
       )}
 
-      {/* VIEW 2: LIVE SCOREBOARD ARENA */}
+      {/* VIEW 2: LIVE SCOREBOARD ARENA (FIT TO SCREEN, NO SCROLL) */}
       {mode === 'scoreboard' && (
-        <div className="h-full w-full overflow-y-auto bg-[#f8f9fa] animate-fade-in">
-          <div className="py-6 sm:py-10">
-            <ScoreboardClient
-              initialTally={initialScoreboard.tally}
-              total={initialScoreboard.total}
-              revealedInit={initialScoreboard.revealed}
-            />
-          </div>
+        <div className="h-full w-full animate-fade-in overflow-hidden">
+          <ScoreboardClient
+            initialTally={initialScoreboard.tally}
+            total={initialScoreboard.total}
+            revealedInit={initialScoreboard.revealed}
+            settings={settings}
+          />
         </div>
       )}
 
       {/* VIEW 3: GIANT STAGE TIMER (DEBAT & Q&A) */}
       {mode === 'timer' && (
-        <div className="h-full w-full animate-fade-in">
+        <div className="h-full w-full animate-fade-in overflow-hidden">
           <TimerClient
             pairs={pairs}
             settings={settings}
             initialTimer={initialTimer}
+          />
+        </div>
+      )}
+
+      {/* VIEW 4: WINNER HIGHLIGHT STAGE */}
+      {mode === 'winner' && (
+        <div className="h-full w-full animate-fade-in overflow-hidden">
+          <PemenangClient
+            pairs={pairs}
+            settings={settings}
+            scoreboard={initialScoreboard}
+            display={displayState}
           />
         </div>
       )}

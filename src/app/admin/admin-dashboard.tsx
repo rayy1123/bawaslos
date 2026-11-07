@@ -699,6 +699,18 @@ export default function AdminDashboard({
                       ⏱️ Timer Debat
                     </button>
 
+                    <button
+                      disabled={displayBusy}
+                      onClick={() => handleSetDisplayMode('winner')}
+                      className={`inline-flex items-center gap-1.5 rounded-xl px-4 py-2 text-xs font-black transition-all ${
+                        displayMode === 'winner'
+                          ? 'bg-[#c9a64a] text-[#0b1f4b] shadow-lg ring-2 ring-white scale-102'
+                          : 'bg-white/10 text-white hover:bg-white/20'
+                      }`}
+                    >
+                      🏆 Pemenang
+                    </button>
+
                     <Link
                       href="/panggung"
                       target="_blank"
@@ -860,8 +872,8 @@ export default function AdminDashboard({
                 </div>
               </div>
 
-              {/* 3 MODE TAMPILAN PANGGUNG */}
-              <div className="grid gap-4 sm:grid-cols-3">
+              {/* 4 MODE TAMPILAN PANGGUNG */}
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
                 {/* 1. Mode Video Banner */}
                 <div
                   className={`flex flex-col justify-between rounded-2xl border-2 p-5 shadow-sm transition-all ${
@@ -905,7 +917,7 @@ export default function AdminDashboard({
                         onClick={handleToggleDisplaySound}
                         className="text-[11px] font-semibold text-slate-600 hover:text-[#0b1f4b] underline"
                       >
-                        {displaySound ? '🔊 Suara: AKTIF' : '🔇 Suara: BISU (Muted)'}
+                        {displaySound ? '🔊 Suara: AKTIF' : '🔇 Suara: BISU'}
                       </button>
 
                       <Link
@@ -941,7 +953,7 @@ export default function AdminDashboard({
                       Live Scoreboard Arena
                     </h3>
                     <p className="mt-1 text-xs text-slate-600 leading-relaxed">
-                      Menampilkan kartu kandidat paslon dan perolehan suara terungkap secara real-time dengan animasi bar pilar.
+                      Menampilkan kartu kandidat paslon dan perolehan suara terungkap secara real-time (tampilan fit-to-screen tanpa scroll).
                     </p>
                   </div>
 
@@ -1029,6 +1041,56 @@ export default function AdminDashboard({
                         className="text-[11px] font-bold text-[#0b1f4b] underline"
                       >
                         Buka /timer ↗
+                      </Link>
+                    </div>
+                  </div>
+                </div>
+
+                {/* 4. Mode Highlight Pemenang Terpilih */}
+                <div
+                  className={`flex flex-col justify-between rounded-2xl border-2 p-5 shadow-sm transition-all ${
+                    displayMode === 'winner'
+                      ? 'border-[#0b1f4b] bg-[#fbf6ea] ring-2 ring-[#c9a64a]/60'
+                      : 'border-slate-200 bg-white hover:border-slate-300'
+                  }`}
+                >
+                  <div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-2xl">🏆</span>
+                      {displayMode === 'winner' && (
+                        <span className="rounded-full bg-[#0b1f4b] px-2.5 py-0.5 text-[10px] font-extrabold text-[#c9a64a]">
+                          ● SEDANG TAMPIL
+                        </span>
+                      )}
+                    </div>
+                    <h3 className="mt-3 font-serif text-base font-bold text-[#0b1f4b]">
+                      Highlight Pemenang Terpilih
+                    </h3>
+                    <p className="mt-1 text-xs text-slate-600 leading-relaxed">
+                      Menampilkan selebrasi resmi pemenang dengan foto besar, trofi, persentase, dan ucapan selamat di layar panggung.
+                    </p>
+                  </div>
+
+                  <div className="mt-5 space-y-2 border-t border-slate-200/60 pt-3">
+                    <button
+                      disabled={displayBusy || displayMode === 'winner'}
+                      onClick={() => handleSetDisplayMode('winner')}
+                      className={`w-full rounded-xl py-2 text-xs font-bold transition-all shadow-xs ${
+                        displayMode === 'winner'
+                          ? 'bg-emerald-600 text-white cursor-default'
+                          : 'bg-[#0b1f4b] text-white hover:bg-[#142c63]'
+                      }`}
+                    >
+                      {displayMode === 'winner' ? '✓ Sedang Tampil di Panggung' : 'Tampilkan Pemenang'}
+                    </button>
+
+                    <div className="flex items-center justify-between pt-1">
+                      <Link
+                        href="/pemenang"
+                        target="_blank"
+                        className="text-[11px] font-bold text-[#0b1f4b] underline ml-auto"
+                      >
+                        Buka /pemenang ↗
                       </Link>
                     </div>
                   </div>

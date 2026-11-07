@@ -834,7 +834,7 @@ export async function setTimerState(data: {
 }
 
 // ---------- KONTROL TAMPILAN LAYAR PANGGUNG / PROYEKTOR ----------
-export type DisplayMode = 'banner' | 'scoreboard' | 'timer';
+export type DisplayMode = 'banner' | 'scoreboard' | 'timer' | 'winner';
 
 export type DisplayState = {
   mode: DisplayMode;
@@ -854,7 +854,7 @@ export async function getDisplayState(): Promise<DisplayState> {
     };
   }
   return {
-    mode: (['banner', 'scoreboard', 'timer'].includes(String(row.mode))
+    mode: (['banner', 'scoreboard', 'timer', 'winner'].includes(String(row.mode))
       ? String(row.mode)
       : 'banner') as DisplayMode,
     video_sound: Boolean(row.video_sound),

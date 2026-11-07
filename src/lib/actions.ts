@@ -357,6 +357,8 @@ export async function setDisplayModeAction(data: {
   const res = await setDisplayState(data);
   revalidatePath('/panggung');
   revalidatePath('/banner');
+  revalidatePath('/pemenang');
+  revalidatePath('/scoreboard');
   revalidatePath('/admin');
   return { ok: true, state: res };
 }

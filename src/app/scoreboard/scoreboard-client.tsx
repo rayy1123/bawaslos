@@ -2,7 +2,8 @@
 
 import Link from 'next/link';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { SealIcon } from '@/components/icons';
+import type { Settings } from '@/lib/queries';
+import LogoSeal from '@/components/LogoSeal';
 
 type TallyRow = {
   pair_id: number;
@@ -17,6 +18,7 @@ type Props = {
   initialTally: TallyRow[];
   total: number;
   revealedInit: number;
+  settings?: Settings;
 };
 
 // Warna tiap paslon (navy / gold / navy-container) ala Civic Excellence.
@@ -58,8 +60,10 @@ function BigNum({ value }: { value: number }) {
   return <span className="font-mono-num">{v.toLocaleString('id-ID')}</span>;
 }
 
-export default function ScoreboardClient({ initialTally, total, revealedInit }: Props) {
+export default function ScoreboardClient({ initialTally, total, revealedInit, settings }: Props) {
   const [api, setApi] = useState<ApiData | null>(null);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     let alive = true;
@@ -76,6 +80,38 @@ export default function ScoreboardClient({ initialTally, total, revealedInit }: 
     return () => { alive = false; clearInterval(id); };
   }, []);
 
+  useEffect(() => {
+    function onFullscreenChange() {
+      setIsFullscreen(!!document.fullscreenElement);
+    }
+    document.addEventListener('fullscreenchange', onFullscreenChange);
+    return () => document.removeEventListener('fullscreenchange', onFullscreenChange);
+  }, []);
+
+  useEffect(() => {
+    function handleKeyDown(e: KeyboardEvent) {
+      if (['INPUT', 'TEXTAREA'].includes((e.target as HTMLElement)?.tagName)) return;
+      if (e.code === 'KeyF') {
+        e.preventDefault();
+        toggleFullscreen();
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
+
+  function toggleFullscreen() {
+    if (!document.fullscreenElement) {
+      if (containerRef.current?.requestFullscreen) {
+        containerRef.current.requestFullscreen();
+      }
+    } else {
+      if (document.exitFullscreen) {
+        document.exitFullscreen();
+      }
+    }
+  }
+
   const livePublished = api ? api.published : true;
   const liveTotal = api ? api.total : total;
   const liveRevealed = api ? api.revealed : revealedInit;
@@ -91,105 +127,187 @@ export default function ScoreboardClient({ initialTally, total, revealedInit }: 
 
   if (!livePublished) {
     return (
-      <main className="mx-auto max-w-2xl px-4 py-20 text-center font-sans">
-        <h1 className="font-serif text-2xl font-bold text-[#1B2E4B]">Scoreboard</h1>
-        <p className="mt-3 text-slate-600">
-          Scoreboard sedang ditutup oleh pengawas. Silakan kembali saat hasil dibuka.
-        </p>
-        <div className="mt-6">
-          <Link href="/" className="text-sm font-semibold text-[#1B2E4B] hover:text-[#C5A059]">← Beranda</Link>
+      <main className="min-h-screen flex items-center justify-center p-4 text-center font-sans bg-[#f8f9fa]">
+        <div className="max-w-md w-full bg-white rounded-3xl p-8 border border-slate-200 shadow-lg space-y-4">
+          <span className="text-4xl">🔒</span>
+          <h1 className="font-serif text-2xl font-bold text-[#1B2E4B]">Scoreboard Ditutup</h1>
+          <p className="text-sm text-slate-600">
+            Scoreboard sedang ditutup oleh pengawas. Silakan kembali saat hasil dibuka.
+          </p>
+          <div className="pt-2">
+            <Link href="/" className="inline-flex items-center gap-1.5 rounded-xl bg-[#0b1f4b] px-5 py-2 text-xs font-bold text-white hover:bg-[#142c63]">
+              ← Beranda
+            </Link>
+          </div>
         </div>
       </main>
     );
   }
 
   return (
-    <main className="arena-grid flex-grow flex flex-col items-center justify-center px-4 py-10 w-full max-w-[1280px] mx-auto font-sans relative lg:px-16">
-      {/* Judul + Total Suara */}
-      <div className="text-center mb-14 z-10 relative w-full">
-        <p className="label-official mb-2">Rekapitulasi Suara · Pemilihan OSIS</p>
-        <h1 className="font-serif text-4xl sm:text-5xl font-extrabold text-[#1B2E4B] tracking-tight uppercase">
-          WHO WILL LEAD US?
-        </h1>
-        <div className="mt-6 inline-flex flex-col items-center bg-[#1B2E4B] p-6 rounded-2xl shadow-xl border border-[#C5A059]/30 relative overflow-hidden">
-          <div className="absolute inset-0 bg-[#C5A059]/10 blur-xl" />
-          <span className="font-bold text-xs uppercase tracking-[0.2em] text-[#e9c176] relative z-10">Total Suara Masuk</span>
-          <span className="font-serif text-5xl sm:text-6xl leading-none text-white font-bold arena-glow relative z-10 mt-1">
-            <BigNum value={totalVotes} />
-          </span>
-          <span className="mt-2 text-xs text-white/60 relative z-10">
-            {liveRevealed} dari {liveTotal} suara diumumkan
-          </span>
-        </div>
-      </div>
-
-      {/* Kartu Paslon */}
-      <div className={`w-full grid grid-cols-1 ${currentTally.length === 2 ? 'md:grid-cols-2 max-w-4xl mx-auto' : 'md:grid-cols-3'} gap-8 items-end relative`}>
-        {currentTally.map((row, idx) => {
-          const pct = (row.votes / totalVotes) * 100;
-          const accent = ACCENTS[idx % ACCENTS.length];
-          const revealed = liveRevealed > 0;
-          return (
-            <div
-              key={row.pair_id}
-              className="flex flex-col items-center w-full bg-white rounded-2xl p-6 sm:p-8 shadow-md border border-slate-200 relative overflow-hidden"
-            >
-              <div className="absolute top-0 left-0 w-full h-2.5" style={{ background: accent }} />
-              {/* Foto Kotak (Square Frame) - Bersih Tanpa Bayangan / Shadow Overlay */}
-              <div className="w-52 h-52 sm:w-60 sm:h-60 rounded-2xl overflow-hidden border-2 border-slate-200 mb-5 relative bg-white flex items-center justify-center shadow-xs">
-                {row.photo_url ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    className="w-full h-full object-cover object-center"
-                    src={row.photo_url}
-                    alt={`Paslon ${row.number}`}
-                  />
-                ) : (
-                  <div className="w-full h-full flex items-center justify-center text-4xl font-extrabold text-[#1B2E4B]/30 font-serif">
-                    {row.chair_name?.[0] ?? '?'}
-                  </div>
-                )}
-                <div className="absolute top-2.5 left-2.5 rounded-lg bg-[#0b1f4b] px-2.5 py-1 text-xs font-mono font-extrabold text-[#c9a64a] shadow-sm">
-                  NO. {String(row.number).padStart(2, '0')}
-                </div>
-              </div>
-              <h2 className="font-serif text-2xl font-bold text-[#1B2E4B] text-center">Paslon {String(row.number).padStart(2, '0')}</h2>
-              <p className="text-base text-[#44474d] text-center mb-6">
-                {row.chair_name || '—'} &amp; {row.vice_name || '—'}
-              </p>
-
-              {/* Angka + Bar pillar */}
-              <div className="flex items-end justify-between w-full h-[260px] gap-6">
-                <div className="flex-grow flex flex-col justify-end items-end h-full">
-                  <span className="font-serif text-2xl font-bold mb-1" style={{ color: accent }}>
-                    {revealed ? `${Math.round(pct)}%` : '—'}
-                  </span>
-                  <span className="text-xs font-semibold uppercase tracking-wide text-[#44474d]">
-                    {revealed ? `${row.votes.toLocaleString('id-ID')} Suara` : 'Belum diumumkan'}
-                  </span>
-                </div>
-                <div className="w-20 h-full bg-[#edeeef] rounded-t-xl relative overflow-hidden border border-[#e1e3e4]">
-                  <div
-                    className="absolute bottom-0 left-0 w-full arena-pillar"
-                    style={{ height: revealed ? `${pct}%` : '0%', background: accent, boxShadow: `0 0 15px ${accent}80` }}
-                  />
-                </div>
-              </div>
+    <div
+      ref={containerRef}
+      onDoubleClick={toggleFullscreen}
+      className="arena-grid relative min-h-screen h-screen max-h-screen w-screen overflow-hidden flex flex-col justify-between p-3 sm:p-5 lg:p-6 bg-[#f8f9fa] select-none"
+    >
+      {/* 1. COMPACT TOP HEADER: Title & Quick Stats (Takes minimal vertical space) */}
+      <header className="relative z-10 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between border-b border-slate-200/80 pb-3">
+        <div className="flex items-center gap-3">
+          <LogoSeal src={settings?.logo_url} className="h-10 w-10 sm:h-12 sm:w-12 shadow-xs" />
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="font-mono text-[10px] font-bold uppercase tracking-wider text-[#b0892f]">
+                {settings?.org_name || 'BAWASLOS'} · SMKN 64 JAKARTA
+              </span>
+              <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.2 text-[9px] font-extrabold text-emerald-800">
+                <span className="h-1.5 w-1.5 rounded-full bg-emerald-600 animate-ping" />
+                Live Update
+              </span>
             </div>
-          );
-        })}
-      </div>
-
-      {isFinal && (
-        <div className="mt-12 w-full max-w-2xl rounded-2xl border border-[#C5A059] bg-white p-8 text-center shadow-[0_8px_30px_rgb(3,25,53,0.08)]">
-          <SealIcon className="mx-auto h-9 w-9 text-[#C5A059]" />
-          <h2 className="mt-3 font-serif text-2xl font-bold text-[#1B2E4B]">Hasil Akhir</h2>
-          <p className="mt-2 text-[#44474d]">
-            Total {liveTotal} suara sah. Paslon {String(leader.number).padStart(2, '0')} memimpin dengan {leader.votes.toLocaleString('id-ID')} suara.
-          </p>
+            <h1 className="font-serif text-lg sm:text-2xl font-black tracking-tight text-[#1B2E4B] uppercase">
+              WHO WILL LEAD US?
+            </h1>
+          </div>
         </div>
-      )}
 
-    </main>
+        {/* Compact Horizontal Total Suara Pill & Controls */}
+        <div className="flex items-center gap-2.5 self-end sm:self-auto">
+          <div className="inline-flex items-center gap-3 bg-[#1B2E4B] px-4 py-1.5 rounded-2xl shadow-md border border-[#C5A059]/30 text-white">
+            <span className="text-[10px] sm:text-xs font-bold uppercase tracking-wider text-[#e9c176]">
+              Total Suara:
+            </span>
+            <span className="font-mono text-xl sm:text-2xl font-black text-white">
+              <BigNum value={totalVotes} />
+            </span>
+            <span className="text-[10px] sm:text-xs text-white/60 font-mono">
+              ({liveRevealed}/{liveTotal} diumumkan)
+            </span>
+          </div>
+
+          <button
+            onClick={toggleFullscreen}
+            className="rounded-xl border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-bold text-slate-700 shadow-xs hover:bg-slate-50"
+            title="Layar Penuh (F)"
+          >
+            ⛶
+          </button>
+
+          <Link
+            href="/"
+            className="rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-bold text-[#0b1f4b] shadow-xs hover:bg-slate-50"
+            title="Kembali ke Beranda"
+          >
+            Beranda
+          </Link>
+        </div>
+      </header>
+
+      {/* 2. CENTER: FIT-TO-SCREEN CANDIDATE CARDS (NO SCROLL NEEDED) */}
+      <main className="relative z-10 my-auto w-full max-w-5xl mx-auto flex items-center justify-center py-2 sm:py-4">
+        <div className={`w-full grid grid-cols-1 ${currentTally.length === 2 ? 'sm:grid-cols-2 max-w-4xl' : 'sm:grid-cols-3'} gap-4 sm:gap-6 lg:gap-8 items-stretch`}>
+          {currentTally.map((row, idx) => {
+            const pct = (row.votes / totalVotes) * 100;
+            const accent = ACCENTS[idx % ACCENTS.length];
+            const revealed = liveRevealed > 0;
+
+            return (
+              <div
+                key={row.pair_id}
+                className="flex flex-col justify-between w-full bg-white rounded-2xl p-4 sm:p-5 lg:p-6 shadow-md border border-slate-200/90 relative overflow-hidden"
+              >
+                {/* Top Accent Strip */}
+                <div className="absolute top-0 left-0 w-full h-2" style={{ background: accent }} />
+
+                {/* Candidate Photo & Names Row */}
+                <div className="flex items-center gap-3.5 sm:gap-4">
+                  {/* Square Photo Frame with Number Badge */}
+                  <div className="relative h-28 w-28 sm:h-32 sm:w-32 lg:h-36 lg:w-36 rounded-xl overflow-hidden border-2 border-slate-200 bg-white shrink-0 shadow-xs">
+                    {row.photo_url ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        className="w-full h-full object-cover object-center"
+                        src={row.photo_url}
+                        alt={`Paslon ${row.number}`}
+                      />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center text-3xl font-black text-[#1B2E4B]/30 font-serif">
+                        {row.chair_name?.[0] ?? '?'}
+                      </div>
+                    )}
+                    <div className="absolute top-1.5 left-1.5 rounded-md bg-[#0b1f4b] px-2 py-0.5 text-[10px] font-mono font-black text-[#c9a64a] shadow-xs">
+                      NO. {String(row.number).padStart(2, '0')}
+                    </div>
+                  </div>
+
+                  {/* Candidate Info */}
+                  <div className="min-w-0 flex-1">
+                    <span className="font-mono text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                      Paslon {String(row.number).padStart(2, '0')}
+                    </span>
+                    <h2 className="font-serif text-base sm:text-lg lg:text-xl font-black text-[#1B2E4B] leading-tight truncate">
+                      {row.chair_name || '—'}
+                    </h2>
+                    <p className="text-xs sm:text-sm font-semibold text-slate-500 truncate">
+                      &amp; {row.vice_name || '—'}
+                    </p>
+                    <div className="mt-2 inline-flex items-center gap-1.5 rounded-lg bg-slate-100 px-2 py-0.5 text-[10px] sm:text-xs font-bold text-slate-700">
+                      {revealed ? `${row.votes.toLocaleString('id-ID')} Suara Sah` : 'Menunggu Reveal'}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Percentage & Pillar Bar (Compact & Proportional) */}
+                <div className="mt-4 flex items-end justify-between gap-4 border-t border-slate-100 pt-3">
+                  <div>
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">
+                      Perolehan
+                    </span>
+                    <span className="font-serif text-3xl sm:text-4xl lg:text-5xl font-black leading-none" style={{ color: accent }}>
+                      {revealed ? `${Math.round(pct)}%` : '—'}
+                    </span>
+                  </div>
+
+                  {/* Vertical Pillar Bar */}
+                  <div className="h-24 sm:h-28 lg:h-32 w-14 sm:w-16 lg:w-20 bg-slate-100 rounded-t-xl overflow-hidden border border-slate-200 relative flex items-end shadow-inner">
+                    <div
+                      className="w-full rounded-t-lg transition-all duration-1000 ease-out"
+                      style={{
+                        height: revealed ? `${pct}%` : '0%',
+                        background: accent,
+                        boxShadow: `0 0 12px ${accent}80`,
+                      }}
+                    />
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </main>
+
+      {/* 3. BOTTOM COMPACT STATUS STRIP */}
+      <footer className="relative z-10 flex flex-col sm:flex-row items-center justify-between gap-2 border-t border-slate-200/80 pt-2 text-[11px] text-slate-500">
+        <div>
+          {isFinal ? (
+            <span className="inline-flex items-center gap-1.5 font-bold text-[#1B2E4B]">
+              🏆 HASIL AKHIR RESMI: Paslon {String(leader.number).padStart(2, '0')} memimpin dengan {leader.votes.toLocaleString('id-ID')} suara sah.
+            </span>
+          ) : (
+            <span>
+              ● Rekapitulasi suara sah diawasi oleh Badan Pengawas Pemilihan OSIS SMK Negeri 64 Jakarta.
+            </span>
+          )}
+        </div>
+
+        <div className="flex items-center gap-3">
+          <Link href="/pemenang" className="font-bold text-[#1B2E4B] hover:text-[#C5A059] underline">
+            🏆 Sorot Pemenang
+          </Link>
+          <span className="font-mono text-[10px] text-slate-400">
+            [F: Fullscreen]
+          </span>
+        </div>
+      </footer>
+    </div>
   );
 }
