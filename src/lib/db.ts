@@ -16,6 +16,7 @@ const SCHEMA_SQL = `
     label       TEXT NOT NULL,              -- "Akun 1"
     token_hash  TEXT,                       -- hash token saat ini (NULL = belum dibuat)
     token_hint  TEXT,                       -- 4 digit awal untuk konfirmasi admin
+    token_plain TEXT,                       -- token lengkap untuk dilihat/disalin admin
     created_at  TEXT NOT NULL DEFAULT (datetime('now'))
   );
 
@@ -258,6 +259,9 @@ async function seed(db: Client) {
 }
 
 async function migrate(db: Client) {
+  try {
+    await db.execute('ALTER TABLE accounts ADD COLUMN token_plain TEXT');
+  } catch {}
   try {
     await db.execute('ALTER TABLE news ADD COLUMN cover_url TEXT');
   } catch {}

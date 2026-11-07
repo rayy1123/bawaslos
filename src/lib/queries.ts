@@ -35,6 +35,7 @@ export type Account = {
   id: number;
   label: string;
   token_hint: string | null;
+  token_plain: string | null;
   has_token: boolean;
 };
 
@@ -60,11 +61,12 @@ export type VoterRecord = {
 // ---------- ACCOUNTS ----------
 export async function listAccounts(): Promise<Account[]> {
   const db = await ensureDb();
-  const res = await db.execute('SELECT id, label, token_hint, token_hash FROM accounts ORDER BY id');
+  const res = await db.execute('SELECT id, label, token_hint, token_plain, token_hash FROM accounts ORDER BY id');
   return res.rows.map((r) => ({
     id: Number(r.id),
     label: String(r.label),
     token_hint: r.token_hint ? String(r.token_hint) : null,
+    token_plain: r.token_plain ? String(r.token_plain) : null,
     has_token: !!r.token_hash,
   }));
 }
@@ -72,29 +74,29 @@ export async function listAccounts(): Promise<Account[]> {
 export async function getAccountWithToken(accountId: number) {
   const db = await ensureDb();
   const res = await db.execute({
-    sql: 'SELECT id, label, token_hash, token_hint FROM accounts WHERE id = ?',
+    sql: 'SELECT id, label, token_hash, token_hint, token_plain FROM accounts WHERE id = ?',
     args: [accountId],
   });
   return plainOne(res.rows[0]) as
-    | { id: number; label: string; token_hash: string | null; token_hint: string | null }
+    | { id: number; label: string; token_hash: string | null; token_hint: string | null; token_plain: string | null }
     | undefined;
 }
 
 // Admin membuat/mengganti token untuk sebuah akun. Mengembalikan token PLAIN
-// (hanya sekali tampil di layar admin).
+// Disimpan token_plain agar admin dapat melihat & menyalin token bilik fisik (unlimited use).
 export async function setAccountToken(accountId: number): Promise<string> {
   const db = await ensureDb();
   const plainToken = generateToken(8);
   const crypto = require('node:crypto') as typeof import('node:crypto');
   const salt = crypto.randomBytes(16).toString('hex');
   const hash = crypto.scryptSync(plainToken, salt, 64).toString('hex');
-  // token_hash menyimpan "salt:hash"; token_hint hanya 4 digit awal untuk konfirmasi admin.
+  // token_hash menyimpan "salt:hash"; token_hint 4 digit awal; token_plain token lengkap untuk admin.
   await db.execute({
-    sql: 'UPDATE accounts SET token_hash = ?, token_hint = ? WHERE id = ?',
-    args: [salt + ':' + hash, plainToken.slice(0, 4), accountId],
+    sql: 'UPDATE accounts SET token_hash = ?, token_hint = ?, token_plain = ? WHERE id = ?',
+    args: [salt + ':' + hash, plainToken.slice(0, 4), plainToken, accountId],
   });
   // Catat audit
-  await audit('TOKEN_RESET', `Token akun ${accountId} dibuat ulang`, accountId);
+  await audit('TOKEN_RESET', `Token akun ${accountId} dibuat ulang (Unlimited Use)`, accountId);
   return plainToken;
 }
 

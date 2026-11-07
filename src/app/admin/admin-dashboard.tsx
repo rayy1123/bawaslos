@@ -922,11 +922,29 @@ export default function AdminDashboard({
                         </div>
                         <div className="mt-3 flex items-center justify-between border-t border-slate-100 pt-2.5">
                           <div>
-                            <span className="text-[11px] text-slate-500 sm:text-xs block">
-                              {a.has_token ? `Hint: ${a.token_hint}••••` : 'Belum ada token'}
-                            </span>
+                            {boothUnlocked && a.token_plain ? (
+                              <div className="flex items-center gap-1">
+                                <span className="font-mono text-xs font-black tracking-widest text-[#0b1f4b] bg-[#fbf6ea] border border-[#b0892f]/40 px-2 py-0.5 rounded-md">
+                                  {a.token_plain}
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() => copyToClipboard(a.token_plain!, `Token ${a.label} (${a.token_plain}) tersalin!`)}
+                                  className="rounded p-1 text-slate-500 hover:text-black hover:bg-slate-100 text-[11px]"
+                                  title="Salin Kode Token"
+                                >
+                                  📋
+                                </button>
+                              </div>
+                            ) : (
+                              <span className="text-[11px] text-slate-500 sm:text-xs block">
+                                {a.has_token
+                                  ? (boothUnlocked ? `Hint: ${a.token_hint}••••` : `Hint: ${a.token_hint}••••`)
+                                  : 'Belum ada token'}
+                              </span>
+                            )}
                             {a.has_token && (
-                              <span className="text-[10px] font-bold text-emerald-700 block">
+                              <span className="text-[10px] font-bold text-emerald-700 block mt-0.5">
                                 ♾️ Unlimited Use
                               </span>
                             )}
